@@ -9,9 +9,7 @@ Page({
     currentTime: '',
     currentWeek: '',
     todayStr: '',
-    // 今日打卡配对列表 [{ inTime, outTime, duration }]
     pairedRecords: [],
-    // 是否有打卡记录（用于显示标签）
     hasRecord: false,
     canClock: true,
     currentLocation: null,
@@ -20,7 +18,6 @@ Page({
     distanceClass: '',
     checkinResult: null,
     config: {
-      // 不再需要上下班时间，只保留位置
       location: {
         latitude: 29.55565896,
         longitude: 106.23342499,
@@ -78,7 +75,6 @@ Page({
     try {
       const config = await ConfigService.getConfig();
       if (this._isUnloaded) return;
-      // 只取 location 部分，忽略上下班时间
       this.setData({
         config: {
           location: config.location || this.data.config.location
@@ -143,29 +139,30 @@ Page({
         .get();
       if (this._isUnloaded) return;
       const records = res.data;
-      // 配对 in-out
+      console.log('今日原始记录:', records);
       let paired = [];
       for (let i = 0; i < records.length; i++) {
-        if (records[i].type === 'in' && i+1 < records.length && records[i+1].type === 'out') {
+        const r = records[i];
+        const type = r.type || 'in';
+        if (type === 'in' && i+1 < records.length && (records[i+1].type || 'in') === 'out') {
           const inRec = records[i];
           const outRec = records[i+1];
-          const duration = outRec.timestamp - inRec.timestamp; // 毫秒
+          const duration = outRec.timestamp - inRec.timestamp;
           paired.push({
             inTime: inRec.time,
             outTime: outRec.time,
             duration: this.formatDuration(duration)
           });
-          i++; // 跳过下一个
-        } else if (records[i].type === 'in' && i === records.length - 1) {
-          // 未配对，只显示进入
+          i++;
+        } else if (type === 'in' && i === records.length - 1) {
           paired.push({
-            inTime: records[i].time,
+            inTime: r.time,
             outTime: '进行中',
             duration: '--'
           });
         }
-        // 单独出（没有配对的in）忽略，或可单独显示，但按常规忽略
       }
+      console.log('配对结果:', paired);
       this.setData({
         pairedRecords: paired,
         hasRecord: paired.length > 0
@@ -176,6 +173,7 @@ Page({
   },
 
   formatDuration(ms) {
+    if (!ms || ms < 0) return '--';
     const totalSec = Math.floor(ms / 1000);
     const hours = Math.floor(totalSec / 3600);
     const minutes = Math.floor((totalSec % 3600) / 60);
@@ -198,7 +196,7 @@ Page({
     }
   },
 
-  // ========== 位置相关（保持不变） ==========
+  // ========== 位置相关 ==========
   async getLocation() {
     try {
       const hasAuth = await app.checkLocationAuth();
@@ -265,7 +263,7 @@ Page({
     });
   },
 
-  // ========== 核心打卡方法（去掉状态判断） ==========
+  // ========== 核心打卡方法（无限制，只记录位置） ==========
   async onClock() {
     if (!this.data.canClock) {
       wx.showToast({ title: '请稍后再试', icon: 'none' });
@@ -280,6 +278,25 @@ Page({
     const dateStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
     const timeStr = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
 
+    // ------ 获取位置（失败不影响打卡） ------
+    let location = null;
+    try {
+      const locRes = await new Promise((resolve, reject) => {
+        wx.getLocation({
+          type: 'wgs84',
+          success: resolve,
+          fail: reject
+        });
+      });
+      location = {
+        latitude: locRes.latitude,
+        longitude: locRes.longitude
+      };
+      console.log('打卡位置记录:', location);
+    } catch (e) {
+      console.log('获取位置失败，打卡继续，不记录位置', e);
+    }
+
     const db = wx.cloud.database();
     let existing = [];
     try {
@@ -293,20 +310,19 @@ Page({
       return;
     }
 
-    // 判断类型：in / out 交替
     let type = 'in';
     if (existing.length > 0) {
       const last = existing[existing.length - 1];
-      if (last.type === 'in') type = 'out';
+      const lastType = last.type || 'in';
+      if (lastType === 'in') type = 'out';
     }
 
-    // 记录不再包含 status 字段
     const record = {
       date: dateStr,
       time: timeStr,
       timestamp: now.getTime(),
       type: type,
-      // 可选择性保存 location 信息，但暂不添加
+      location: location   // 保存经纬度
     };
 
     try {
@@ -314,7 +330,7 @@ Page({
       await db.collection('records').add({ data: record });
       wx.hideLoading();
       if (this._isUnloaded) return;
-      this.loadTodayRecords();
+      await this.loadTodayRecords();
       const typeName = type === 'in' ? '进入' : '离开';
       this.showCheckinResult('success', '✓', `${typeName}打卡成功 (${timeStr})`);
     } catch (e) {
