@@ -1,0 +1,87 @@
+/* pages/admin/admin.wxss - 系统配置页面样式 */
+
+/* 配置卡片 */
+.config-card {
+  padding: 0;
+  margin-bottom: 20rpx;
+}
+
+.card-header {
+  padding: 24rpx 30rpx;
+  border-bottom: 1rpx solid #f0f0f0;
+}
+
+.card-header .title {
+  margin-bottom: 0;
+}
+
+.config-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 24rpx 30rpx;
+  border-bottom: 1rpx solid #f0f0f0;
+}
+
+.config-item:last-child {
+  border-bottom: none;
+}
+
+.config-label {
+  font-size: 30rpx;
+  color: #333;
+}
+
+.config-value {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+  color: var(--primary-color);
+}
+
+.config-input {
+  flex: 1;
+  text-align: right;
+  font-size: 30rpx;
+  color: #333;
+  margin-left: 20rpx;
+}
+
+.arrow {
+  font-size: 32rpx;
+  color: #ccc;
+}
+
+.location-coords {
+  font-size: 24rpx;
+  color: #666;
+  max-width: 300rpx;
+}
+
+/* 位置操作按钮 */
+.location-actions {
+  display: flex;
+  gap: 20rpx;
+  padding: 20rpx 30rpx;
+}
+
+.btn-small {
+  padding: 16rpx 30rpx;
+  font-size: 26rpx;
+  margin: 0;
+}
+
+/* 地图预览 */
+.map-preview {
+  padding: 0 30rpx 20rpx;
+}
+
+.map-preview map {
+  border-radius: 12rpx;
+  overflow: hidden;
+}
+
+/* 保存按钮 */
+.save-section {
+  padding: 40rpx 30rpx;
+}

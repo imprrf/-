@@ -1,0 +1,77 @@
+<!-- pages/admin/userList.wxml - 成员管理页面 -->
+<view class="page-container">
+  <!-- 搜索栏 -->
+  <view class="search-bar card">
+    <input 
+      class="search-input"
+      placeholder="搜索成员姓名或手机号"
+      value="{{searchKey}}"
+      bindinput="onSearchInput"
+    />
+    <button class="search-btn" bindtap="onSearch">搜索</button>
+  </view>
+
+  <!-- 成员列表 -->
+  <view class="user-list">
+    <view 
+      class="user-card card"
+      wx:for="{{users}}"
+      wx:key="openid"
+    >
+      <view class="user-info">
+        <image 
+          class="user-avatar" 
+          src="{{item.avatar || '/assets/icons/default_avatar.png'}}" 
+          mode="aspectFill"
+        ></image>
+        <view class="user-detail">
+          <text class="user-name">{{item.name || '未设置姓名'}}</text>
+          <text class="user-phone">{{item.phone || '未绑定手机'}}</text>
+          <text class="user-time">注册时间：{{item.createTimeStr}}</text>
+        </view>
+        <view class="user-actions">
+          <text class="tag {{item.isAdmin ? 'tag-warning' : 'tag-default'}}">
+            {{item.isAdmin ? '管理员' : '成员'}}
+          </text>
+        </view>
+      </view>
+      
+      <view class="user-footer">
+        <view class="stat-row">
+          <view class="stat-item">
+            <text class="stat-value text-success">{{item.stats.presentDays || 0}}</text>
+            <text class="stat-label">出勤</text>
+          </view>
+          <view class="stat-item">
+            <text class="stat-value text-error">{{item.stats.lateDays || 0}}</text>
+            <text class="stat-label">迟到</text>
+          </view>
+          <view class="stat-item">
+            <text class="stat-value text-warning">{{item.stats.earlyDays || 0}}</text>
+            <text class="stat-label">早退</text>
+          </view>
+        </view>
+        
+        <view class="action-row">
+          <view class="action-btn" bindtap="onViewRecords" data-user="{{item}}">
+            <text>查看记录</text>
+          </view>
+          <view class="action-btn" bindtap="onToggleAdmin" data-user="{{item}}">
+            <text>{{item.isAdmin ? '取消管理员' : '设为管理员'}}</text>
+          </view>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 空状态 -->
+  <view class="empty-state" wx:if="{{users.length === 0 && !loading}}">
+    <text class="icon">👥</text>
+    <text>暂无成员数据</text>
+  </view>
+
+  <!-- 加载状态 -->
+  <view class="loading-state" wx:if="{{loading}}">
+    <text>加载中...</text>
+  </view>
+</view>

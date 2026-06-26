@@ -1,0 +1,112 @@
+<!-- pages/admin/admin.wxml - 系统配置页面 -->
+<view class="page-container">
+  <!-- 考勤时间设置 -->
+  <view class="config-card card">
+    <view class="card-header">
+      <text class="title">考勤时间设置</text>
+    </view>
+    
+    <view class="config-item">
+      <text class="config-label">上班时间</text>
+      <picker mode="time" value="{{config.workStartTime}}" bindchange="onStartTimeChange">
+        <view class="config-value">
+          <text>{{config.workStartTime}}</text>
+          <text class="arrow">›</text>
+        </view>
+      </picker>
+    </view>
+    
+    <view class="config-item">
+      <text class="config-label">下班时间</text>
+      <picker mode="time" value="{{config.workEndTime}}" bindchange="onEndTimeChange">
+        <view class="config-value">
+          <text>{{config.workEndTime}}</text>
+          <text class="arrow">›</text>
+        </view>
+      </picker>
+    </view>
+  </view>
+
+  <!-- 考勤地点设置 -->
+  <view class="config-card card">
+    <view class="card-header">
+      <text class="title">考勤地点设置</text>
+    </view>
+    
+    <view class="config-item">
+      <text class="config-label">地点名称</text>
+      <input 
+        class="config-input"
+        placeholder="请输入地点名称"
+        value="{{config.location.name}}"
+        bindinput="onLocationNameInput"
+      />
+    </view>
+    
+    <view class="config-item">
+      <text class="config-label">考勤半径</text>
+      <view class="config-value">
+        <text>{{config.location.radius}}米</text>
+      </view>
+    </view>
+    
+    <view class="config-item">
+      <text class="config-label">当前位置</text>
+      <view class="config-value">
+        <text class="location-coords" wx:if="{{currentLocation}}">
+          {{currentLocation.latitude.toFixed(6)}}, {{currentLocation.longitude.toFixed(6)}}
+        </text>
+        <text class="text-secondary" wx:else>未获取</text>
+      </view>
+    </view>
+    
+    <view class="location-actions">
+      <button class="btn btn-small" bindtap="onGetCurrentLocation">获取当前位置</button>
+      <button class="btn btn-small btn-primary" bindtap="onSetAsLocation">设为考勤地点</button>
+    </view>
+    
+    <view class="map-preview" wx:if="{{mapShow}}">
+      <map 
+        id="adminMap"
+        latitude="{{mapLatitude}}" 
+        longitude="{{mapLongitude}}"
+        scale="16"
+        markers="{{markers}}"
+        circles="{{circles}}"
+        style="width: 100%; height: 300rpx;"
+      ></map>
+    </view>
+  </view>
+
+  <!-- 考勤规则 -->
+  <view class="config-card card">
+    <view class="card-header">
+      <text class="title">考勤规则</text>
+    </view>
+    
+    <view class="config-item">
+      <text class="config-label">迟到宽限</text>
+      <picker mode="selector" range="{{lateOptions}}" bindchange="onLateChange">
+        <view class="config-value">
+          <text>{{config.lateMinutes}}分钟</text>
+          <text class="arrow">›</text>
+        </view>
+      </picker>
+    </view>
+    
+    <view class="config-item">
+      <text class="config-label">早退宽限</text>
+      <picker mode="selector" range="{{earlyOptions}}" bindchange="onEarlyChange">
+        <view class="config-value">
+          <text>{{config.earlyMinutes}}分钟</text>
+          <text class="arrow">›</text>
+        </view>
+      </picker>
+    </view>
+  </view>
+
+  <!-- 保存按钮 -->
+  <view class="save-section">
+    <button class="btn btn-primary" bindtap="onSave">保存配置</button>
+  </view>
+</view>

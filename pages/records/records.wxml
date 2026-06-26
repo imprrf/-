@@ -1,0 +1,43 @@
+<view class="calendar-container">
+  <!-- 月份切换 -->
+  <view class="calendar-header">
+    <view class="arrow" bindtap="prevMonth">‹</view>
+    <view class="title">{{year}}年{{month}}月</view>
+    <view class="arrow" bindtap="nextMonth">›</view>
+  </view>
+
+  <!-- 星期 -->
+  <view class="week-row">
+    <view wx:for="{{weekDays}}" wx:key="index" class="week-item">{{item}}</view>
+  </view>
+
+  <!-- 日期网格 -->
+  <view class="date-grid">
+    <view wx:for="{{calendarGrid}}" wx:key="index" class="date-cell">
+      <view wx:if="{{item.day}}" class="day-num" data-date="{{item.date}}" bindtap="onDateTap">
+        {{item.day}}
+        <view wx:if="{{item.color}}" class="dot {{item.color}}"></view>
+      </view>
+    </view>
+  </view>
+</view>
+
+<!-- 详情弹窗 -->
+<view wx:if="{{showDetail}}" class="detail-mask" bindtap="closeDetail">
+  <view class="detail-popup" catchtap="">
+    <view class="detail-title">{{selectedDate}} 打卡详情</view>
+    <block wx:if="{{selectedDateRecords.length > 0}}">
+      <view wx:for="{{selectedDateRecords}}" wx:key="index" class="record-item">
+        <text class="pair-info">
+          {{item.inTime}} 进 → {{item.outTime}} 出
+        </text>
+        <text class="duration">{{item.duration}}</text>
+        <text class="status-tag {{item.status}}">{{item.status === 'normal' ? '正常' : (item.status === 'late' ? '迟到' : '早退')}}</text>
+      </view>
+    </block>
+    <block wx:else>
+      <view class="no-record">当天无打卡记录</view>
+    </block>
+    <button class="close-btn" bindtap="closeDetail">关闭</button>
+  </view>
+</view>

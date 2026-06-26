@@ -1,0 +1,87 @@
+<!-- pages/index/index.wxml - 打卡首页 -->
+<view class="page-container">
+  <!-- 未登录提示 -->
+  <view wx:if="{{!isLogin}}" class="login-tip card">
+    <view class="login-tip-content">
+      <text class="title">欢迎使用考勤打卡</text>
+      <text class="subtitle">点击下方按钮进行登录</text>
+    </view>
+    <button class="btn btn-primary" bindtap="onLogin">微信一键登录</button>
+  </view>
+
+  <!-- 已登录状态 -->
+  <block wx:else>
+    <!-- 日期时间显示 -->
+    <view class="time-card card">
+      <view class="current-date">{{currentDate}}</view>
+      <view class="current-time">{{currentTime}}</view>
+      <view class="current-week">{{currentWeek}}</view>
+    </view>
+
+    <!-- 今日打卡记录卡片（配对显示） -->
+    <view class="status-card card">
+      <view class="status-header">
+        <text class="status-title">今日打卡记录</text>
+        <text class="status-date">{{todayStr}}</text>
+      </view>
+      
+      <view class="record-list">
+        <view wx:if="{{pairedRecords.length === 0}}" class="no-record">今日暂无打卡</view>
+        <view wx:for="{{pairedRecords}}" wx:key="index" class="record-item">
+          <text class="pair-info">{{item.inTime}} 进 → {{item.outTime}} 出</text>
+          <text class="duration">{{item.duration}}</text>
+        </view>
+      </view>
+    </view>
+
+    <!-- 打卡按钮 -->
+    <view class="checkin-area card">
+      <view class="buttons-header">
+        <!-- 移除考勤时间显示 -->
+        <text class="location-info" bindtap="onCheckLocation">
+          <text class="location-icon">📍</text>
+          {{config.location.name}}
+        </text>
+      </view>
+
+      <button class="btn-checkin" bindtap="onClock">点击打卡</button>
+
+      <!-- 打卡结果提示 -->
+      <view class="checkin-result" wx:if="{{checkinResult}}">
+        <text class="result-icon {{checkinResult.type}}">{{checkinResult.icon}}</text>
+        <text class="result-text">{{checkinResult.message}}</text>
+      </view>
+    </view>
+
+    <!-- 快速操作入口 -->
+    <view class="quick-actions card">
+      <view class="action-item" bindtap="goToRecords">
+        <text class="action-icon">📋</text>
+        <text class="action-text">打卡记录</text>
+        <text class="action-arrow">></text>
+      </view>
+      <view class="action-item" bindtap="goToStatistics">
+        <text class="action-icon">📊</text>
+        <text class="action-text">考勤统计</text>
+        <text class="action-arrow">></text>
+      </view>
+      <view class="action-item" bindtap="onRefresh">
+        <text class="action-icon">🔄</text>
+        <text class="action-text">刷新状态</text>
+        <text class="action-arrow">></text>
+      </view>
+    </view>
+
+    <!-- 定位信息 -->
+    <view class="location-card card" wx:if="{{currentLocation}}">
+      <view class="location-row">
+        <text class="location-label">当前位置：</text>
+        <text class="location-value">{{currentLocationText}}</text>
+      </view>
+      <view class="location-row">
+        <text class="location-label">距离考勤点：</text>
+        <text class="location-value {{distanceClass}}">{{distanceText}}</text>
+      </view>
+    </view>
+  </block>
+</view>
