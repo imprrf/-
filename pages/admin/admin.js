@@ -1,266 +1,308 @@
-/**
- * pages/admin/admin.js - 系统配置页面逻辑
- * @description 管理考勤时间、地点、规则等配置
- */
-
-const app = getApp();
-const ConfigService = require('../../services/ConfigService');
+const app = getApp()
 
 Page({
   data: {
-    // 配置数据
-    config: {
-      workStartTime: '09:00',
-      workEndTime: '18:00',
-      lateMinutes: 0,
-      earlyMinutes: 0,
-      location: {
-        latitude: 31.230416,
-        longitude: 121.473701,
-        radius: 300,
-        name: '默认考勤地点'
-      }
-    },
+    // ===== 权限相关 =====
+    isAdmin: false,
+    tapCount: 0,                // 连续点击计数
+    lastTapTime: 0,             // 上次点击时间（用于判断连续点击）
 
-    // 迟到选项
-    lateOptions: ['0分钟', '5分钟', '10分钟', '15分钟', '30分钟'],
-    lateValues: [0, 5, 10, 15, 30],
+    // ===== 统计数据 =====
+    totalRecords: 0,
+    totalHours: 0,
+    todayCount: 0,
 
-    // 早退选项
-    earlyOptions: ['0分钟', '5分钟', '10分钟', '15分钟', '30分钟'],
-    earlyValues: [0, 5, 10, 15, 30],
+    // ===== 筛选条件 =====
+    startDate: '',
+    endDate: '',
+    userList: [],
+    selectedUserOpenId: '',
+    selectedUserName: '全部用户',
 
-    // 当前位置
-    currentLocation: null,
-
-    // 地图配置
-    mapShow: false,
-    mapLatitude: 31.230416,
-    mapLongitude: 121.473701,
-    markers: [],
-    circles: []
+    // ===== 记录列表 =====
+    filteredRecords: [],
+    allRawRecords: []
   },
 
   onLoad() {
-    this.loadConfig();
+    this.initDates()
+    this.checkAdmin()
   },
 
   onShow() {
-    this.checkAdmin();
-  },
-
-  // 检查管理员权限
-  checkAdmin() {
-    if (!app.globalData.isAdmin) {
-      wx.showToast({
-        title: '无权限访问',
-        icon: 'none'
-      });
-      setTimeout(() => {
-        wx.navigateBack();
-      }, 1500);
+    // 每次显示时刷新（如果已是管理员）
+    if (this.data.isAdmin) {
+      this.loadUserList()
+      this.loadData()
     }
   },
 
-  // 加载配置
-  async loadConfig() {
+  // ========== 1. 权限检查 ==========
+  async checkAdmin() {
+    const db = wx.cloud.database()
     try {
-      const config = await ConfigService.getConfig();
-      this.setData({ config });
-      this.updateMapConfig(config.location);
-    } catch (e) {
-      console.log('加载配置失败', e);
-    }
-  },
-
-  // 修改上班时间
-  onStartTimeChange(e) {
-    const value = e.detail.value;
-    this.setData({
-      'config.workStartTime': value
-    });
-  },
-
-  // 修改下班时间
-  onEndTimeChange(e) {
-    const value = e.detail.value;
-    this.setData({
-      'config.workEndTime': value
-    });
-  },
-
-  // 输入地点名称
-  onLocationNameInput(e) {
-    this.setData({
-      'config.location.name': e.detail.value
-    });
-  },
-
-  // 获取当前位置
-  onGetCurrentLocation() {
-    wx.showLoading({ title: '获取位置中...' });
-
-    wx.getLocation({
-      type: 'gcj02',
-      success: (res) => {
-        wx.hideLoading();
-        this.setData({
-          currentLocation: {
-            latitude: res.latitude,
-            longitude: res.longitude
-          }
-        });
-        
-        // 更新地图显示
-        this.setData({
-          mapShow: true,
-          mapLatitude: res.latitude,
-          mapLongitude: res.longitude
-        });
-        
-        this.updateMapConfig({
-          ...this.data.config.location,
-          latitude: res.latitude,
-          longitude: res.longitude
-        });
-      },
-      fail: (err) => {
-        wx.hideLoading();
-        wx.showToast({
-          title: '获取位置失败',
-          icon: 'none'
-        });
-        console.log('获取位置失败', err);
+      const openid = app.globalData.userInfo?.openid || ''
+      if (!openid) {
+        // 未登录，等一会再试
+        setTimeout(() => this.checkAdmin(), 500)
+        return
       }
-    });
+      const res = await db.collection('admins').where({ openid }).get()
+      const isAdmin = res.data.length > 0
+      this.setData({ isAdmin })
+      if (isAdmin) {
+        // 是管理员，加载数据
+        this.loadUserList()
+        this.loadData()
+      }
+    } catch (e) {
+      console.log('权限检查失败', e)
+      // 可能是 admins 集合不存在，静默失败，用户可通过点击激活
+      this.setData({ isAdmin: false })
+    }
   },
 
-  // 设为考勤地点
-  onSetAsLocation() {
-    const { currentLocation, config } = this.data;
-    
-    if (!currentLocation) {
-      wx.showToast({
-        title: '请先获取当前位置',
-        icon: 'none'
-      });
-      return;
+  // ========== 2. 点击10次激活管理员 ==========
+  onSecretTap() {
+    const now = Date.now()
+    const { tapCount, lastTapTime } = this.data
+
+    // 如果距离上次点击超过2秒，重置计数（防止用户慢慢点）
+    if (now - lastTapTime > 2000) {
+      this.setData({ tapCount: 1, lastTapTime: now })
+      return
     }
 
-    wx.showModal({
-      title: '确认设置',
-      content: '确定将当前位置设为考勤地点？',
-      success: (res) => {
-        if (res.confirm) {
-          this.setData({
-            'config.location.latitude': currentLocation.latitude,
-            'config.location.longitude': currentLocation.longitude
-          });
-          
-          this.updateMapConfig({
-            ...config.location,
-            latitude: currentLocation.latitude,
-            longitude: currentLocation.longitude
-          });
-          
-          wx.showToast({
-            title: '设置成功',
-            icon: 'success'
-          });
+    const newCount = tapCount + 1
+    this.setData({ tapCount: newCount, lastTapTime: now })
+
+    // 达到10次，激活管理员
+    if (newCount >= 10) {
+      this.activateAdmin()
+      this.setData({ tapCount: 0 })
+    }
+  },
+
+  // ========== 3. 激活管理员（写入 admins 集合） ==========
+  async activateAdmin() {
+    try {
+      const db = wx.cloud.database()
+      const openid = app.globalData.userInfo?.openid || ''
+
+      if (!openid) {
+        wx.showToast({ title: '请先登录', icon: 'none' })
+        return
+      }
+
+      // 先检查是否已是管理员
+      const checkRes = await db.collection('admins').where({ openid }).get()
+      if (checkRes.data.length > 0) {
+        wx.showToast({ title: '已是管理员', icon: 'success' })
+        this.setData({ isAdmin: true })
+        this.loadUserList()
+        this.loadData()
+        return
+      }
+
+      // 写入 admins 集合（如果集合不存在，首次写入会自动创建）
+      await db.collection('admins').add({ data: { openid } })
+
+      wx.showToast({ title: '🎉 管理员权限已开启', icon: 'success' })
+      this.setData({ isAdmin: true })
+      app.globalData.isAdmin = true
+
+      // 加载数据
+      this.loadUserList()
+      this.loadData()
+
+    } catch (e) {
+      console.error('激活管理员失败', e)
+      // 如果集合不存在，尝试重新创建
+      if (e.errCode === -502005) {
+        wx.showToast({ title: '请先创建 admins 集合', icon: 'none' })
+      } else {
+        wx.showToast({ title: '激活失败，请重试', icon: 'none' })
+      }
+    }
+  },
+
+  // ========== 4. 初始化日期 ==========
+  initDates() {
+    const now = new Date()
+    const year = now.getFullYear()
+    const month = String(now.getMonth() + 1).padStart(2, '0')
+    const day = String(now.getDate()).padStart(2, '0')
+    const today = `${year}-${month}-${day}`
+    this.setData({
+      startDate: `${year}-${month}-01`,
+      endDate: today
+    })
+  },
+
+  // ========== 5. 加载用户列表 ==========
+  async loadUserList() {
+    const db = wx.cloud.database()
+    try {
+      const res = await db.collection('users').get()
+      const list = res.data.map(u => ({
+        openid: u._openid,
+        name: u.nickName || u.userInfo?.nickName || '未知'
+      }))
+      this.setData({ userList: list })
+    } catch (e) {
+      console.log('加载用户列表失败', e)
+    }
+  },
+
+  // ========== 6. 核心：加载打卡记录 ==========
+  async loadData() {
+    if (!this.data.isAdmin) {
+      wx.showToast({ title: '无权限', icon: 'none' })
+      return
+    }
+
+    wx.showLoading({ title: '加载中...' })
+    const db = wx.cloud.database()
+    const _ = db.command
+
+    try {
+      const { startDate, endDate, selectedUserOpenId } = this.data
+
+      const where = {}
+      if (startDate && endDate) {
+        where.date = _.gte(startDate).and(_.lte(endDate))
+      }
+      if (selectedUserOpenId) {
+        where._openid = selectedUserOpenId
+      }
+
+      const res = await db.collection('records')
+        .where(where)
+        .orderBy('timestamp', 'asc')
+        .limit(1000)
+        .get()
+
+      wx.hideLoading()
+
+      const records = res.data || []
+
+      // 补充用户名
+      const userMap = {}
+      this.data.userList.forEach(u => {
+        userMap[u.openid] = u.name
+      })
+      const enriched = records.map(r => ({
+        ...r,
+        userName: userMap[r._openid] || r._openid.substring(0, 8) + '...'
+      }))
+
+      const paired = this.pairRecords(enriched)
+
+      // 统计
+      const totalRecords = records.length
+      const totalHours = paired.reduce((sum, p) => {
+        if (p.durationNum) return sum + p.durationNum
+        return sum
+      }, 0)
+      const today = new Date().toISOString().slice(0, 10)
+      const todayCount = records.filter(r => r.date === today).length
+
+      this.setData({
+        allRawRecords: enriched,
+        filteredRecords: paired,
+        totalRecords,
+        totalHours: (totalHours / 3600).toFixed(1),
+        todayCount
+      })
+
+    } catch (e) {
+      wx.hideLoading()
+      console.error('加载数据失败:', e)
+      wx.showToast({ title: '加载失败: ' + (e.errMsg || e.message), icon: 'none' })
+    }
+  },
+
+  // ========== 7. 配对逻辑 ==========
+  pairRecords(records) {
+    const userMap = {}
+    records.forEach(r => {
+      if (!userMap[r._openid]) userMap[r._openid] = []
+      userMap[r._openid].push(r)
+    })
+
+    const result = []
+    Object.keys(userMap).forEach(openid => {
+      const list = userMap[openid].sort((a, b) => a.timestamp - b.timestamp)
+      const userName = list[0]?.userName || openid.substring(0, 8)
+      let i = 0
+      while (i < list.length) {
+        const cur = list[i]
+        const type = cur.type || 'in'
+        if (type === 'in' && i + 1 < list.length && (list[i+1].type || 'in') === 'out') {
+          const inRec = list[i]
+          const outRec = list[i+1]
+          const durationSec = (outRec.timestamp - inRec.timestamp) / 1000
+          result.push({
+            date: inRec.date,
+            userName,
+            inTime: inRec.time,
+            outTime: outRec.time,
+            duration: this.formatDuration(durationSec),
+            durationNum: durationSec
+          })
+          i += 2
+        } else if (type === 'in') {
+          result.push({
+            date: cur.date,
+            userName,
+            inTime: cur.time,
+            outTime: '进行中',
+            duration: '--',
+            durationNum: 0
+          })
+          i++
+        } else {
+          i++
         }
       }
-    });
+    })
+    return result.sort((a, b) => b.date.localeCompare(a.date))
   },
 
-  // 修改迟到宽限
-  onLateChange(e) {
-    const index = e.detail.value;
-    this.setData({
-      'config.lateMinutes': this.data.lateValues[index]
-    });
+  formatDuration(seconds) {
+    if (!seconds || seconds < 0) return '--'
+    const hrs = Math.floor(seconds / 3600)
+    const mins = Math.floor((seconds % 3600) / 60)
+    if (hrs > 0) return `${hrs}h${mins > 0 ? mins + 'm' : ''}`
+    else if (mins > 0) return `${mins}m`
+    else return '0m'
   },
 
-  // 修改早退宽限
-  onEarlyChange(e) {
-    const index = e.detail.value;
-    this.setData({
-      'config.earlyMinutes': this.data.earlyValues[index]
-    });
+  // ========== 8. 筛选事件 ==========
+  onStartDateChange(e) {
+    this.setData({ startDate: e.detail.value })
   },
-
-  // 更新地图配置
-  updateMapConfig(location) {
-    if (!location) return;
-
-    const marker = {
-      id: 1,
-      latitude: location.latitude,
-      longitude: location.longitude,
-      width: 30,
-      height: 30,
-      title: location.name || '考勤地点'
-    };
-
-    const circle = {
-      latitude: location.latitude,
-      longitude: location.longitude,
-      radius: location.radius || 300,
-      fillColor: '#1890ff33',
-      strokeColor: '#1890ff',
-      strokeWidth: 2
-    };
-
-    this.setData({
-      mapShow: true,
-      mapLatitude: location.latitude,
-      mapLongitude: location.longitude,
-      markers: [marker],
-      circles: [circle]
-    });
+  onEndDateChange(e) {
+    this.setData({ endDate: e.detail.value })
   },
-
-  // 保存配置
-  async onSave() {
-    const { config } = this.data;
-
-    // 验证
-    if (!config.location.name) {
-      wx.showToast({
-        title: '请输入地点名称',
-        icon: 'none'
-      });
-      return;
+  onUserChange(e) {
+    const index = e.detail.value
+    const user = this.data.userList[index]
+    if (user) {
+      this.setData({
+        selectedUserOpenId: user.openid,
+        selectedUserName: user.name
+      })
+    } else {
+      this.setData({
+        selectedUserOpenId: '',
+        selectedUserName: '全部用户'
+      })
     }
+  },
 
-    wx.showLoading({ title: '保存中...' });
-
-    try {
-      const result = await ConfigService.updateConfig(config);
-      
-      wx.hideLoading();
-      
-      if (result.success) {
-        app.showSuccess('保存成功');
-        
-        // 更新全局配置
-        app.globalData.config = result.config;
-        
-        setTimeout(() => {
-          wx.navigateBack();
-        }, 1500);
-      } else {
-        wx.showToast({
-          title: '保存失败',
-          icon: 'none'
-        });
-      }
-    } catch (e) {
-      wx.hideLoading();
-      console.log('保存失败', e);
-      wx.showToast({
-        title: '保存失败',
-        icon: 'none'
-      });
-    }
+  // 刷新按钮
+  onRefresh() {
+    this.loadData()
   }
-});
+})
