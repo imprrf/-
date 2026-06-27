@@ -72,15 +72,10 @@
       </view>
     </view>
 
-    <!-- 定位信息 -->
     <view class="location-card card" wx:if="{{currentLocation}}">
       <view class="location-row">
         <text class="location-label">当前位置：</text>
         <text class="location-value">{{currentLocationText}}</text>
-      </view>
-      <view class="location-row">
-        <text class="location-label">距离考勤点：</text>
-        <text class="location-value {{distanceClass}}">{{distanceText}}</text>
       </view>
     </view>
   </block>
