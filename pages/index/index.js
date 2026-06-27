@@ -126,42 +126,70 @@ Page({
     });
   },
 
-  // ========== 加载今日记录并配对 ==========
+  // ========== 【流式状态机重构】加载今日记录并配对 ==========
   async loadTodayRecords() {
     if (!app.globalData.isLogin) return;
     const db = wx.cloud.database();
     const today = new Date();
     const dateStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+    
     try {
       const res = await db.collection('records')
         .where({ date: dateStr })
         .orderBy('timestamp', 'asc')
         .get();
+
       if (this._isUnloaded) return;
       const records = res.data;
       console.log('今日原始记录:', records);
+
       let paired = [];
+      let currentIn = null; // 用于缓存当前未配对的签入记录
+
       for (let i = 0; i < records.length; i++) {
         const r = records[i];
         const type = r.type || 'in';
-        if (type === 'in' && i+1 < records.length && (records[i+1].type || 'in') === 'out') {
-          const inRec = records[i];
-          const outRec = records[i+1];
-          const duration = outRec.timestamp - inRec.timestamp;
-          paired.push({
-            inTime: inRec.time,
-            outTime: outRec.time,
-            duration: this.formatDuration(duration)
-          });
-          i++;
-        } else if (type === 'in' && i === records.length - 1) {
-          paired.push({
-            inTime: r.time,
-            outTime: '进行中',
-            duration: '--'
-          });
+
+        if (type === 'in') {
+          // 容错：如果之前已经有一个 in 了，说明上一次漏签退了
+          if (currentIn) {
+            paired.push({
+              inTime: currentIn.time,
+              outTime: '漏签退',
+              duration: '--'
+            });
+          }
+          currentIn = r; // 将当前签入点记作起点
+        } else if (type === 'out') {
+          if (currentIn) {
+            // 完美配对
+            const duration = r.timestamp - currentIn.timestamp;
+            paired.push({
+              inTime: currentIn.time,
+              outTime: r.time,
+              duration: this.formatDuration(duration)
+            });
+            currentIn = null; // 成功闭合，释放指针
+          } else {
+            // 容错：没有签入直接离场
+            paired.push({
+              inTime: '漏签到',
+              outTime: r.time,
+              duration: '--'
+            });
+          }
         }
       }
+
+      // 重点：当全部记录跑完后，如果 currentIn 还有值，说明最后一次打卡是“进入”，且还没走
+      if (currentIn) {
+        paired.push({
+          inTime: currentIn.time,
+          outTime: '进行中',
+          duration: '--'
+        });
+      }
+
       console.log('配对结果:', paired);
       this.setData({
         pairedRecords: paired,
@@ -278,23 +306,16 @@ Page({
     const dateStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
     const timeStr = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
 
-    // ------ 获取位置（失败不影响打卡） ------
     let location = null;
     try {
-      const locRes = await new Promise((resolve, reject) => {
-        wx.getLocation({
-          type: 'wgs84',
-          success: resolve,
-          fail: reject
-        });
-      });
+      const locRes = await app.getLocation({ enableHighAccuracy: true, force: true });
       location = {
         latitude: locRes.latitude,
         longitude: locRes.longitude
       };
-      console.log('打卡位置记录:', location);
+      console.log('真实打卡位置记录(gcj02):', location);
     } catch (e) {
-      console.log('获取位置失败，打卡继续，不记录位置', e);
+      console.log('获取打卡位置失败，打卡继续，不记录位置', e);
     }
 
     const db = wx.cloud.database();
@@ -322,7 +343,7 @@ Page({
       time: timeStr,
       timestamp: now.getTime(),
       type: type,
-      location: location   // 保存经纬度
+      location: location
     };
 
     try {

@@ -56,31 +56,35 @@ App({
     }
   },
 
-  /**
-   * 用户登录（获取 openid 并写库）
+
+/**
+   * 用户登录（通过云函数获取真实不变的 openid 并写库）
    */
   async login() {
     return new Promise(async (resolve, reject) => {
       try {
         wx.showLoading({ title: '登录中...', mask: true });
 
-        // 获取微信登录临时 code
-        const loginRes = await wx.login();
-        if (!loginRes.code) {
-          throw new Error('登录失败，未获取到code');
+        // ------ 【已修复】调用刚刚部署的云函数获取真实唯一 OPENID ------
+        const cloudRes = await wx.cloud.callFunction({
+          name: 'getOpenid'
+        });
+        
+        if (!cloudRes || !cloudRes.result || !cloudRes.result.openid) {
+          throw new Error('云函数获取openid失败');
         }
 
-        // 演示环境：用模拟 openid；生产环境请使用云函数获取真实 openid
-        const openid = `user_${loginRes.code}_${Date.now()}`;
+        const openid = cloudRes.result.openid;
+        console.log('当前登录用户的真实唯一OpenID:', openid);
 
-        // 查询用户
+        // 查询用户（此时同一个用户无论登录多少次，openid 永远相同）
         let userInfo = await DbService.getOne('users', { openid });
 
         if (!userInfo) {
-          // 新用户注册
+          // 真正的新用户注册
           userInfo = {
             openid,
-            name: '',
+            name: '微信用户',
             avatar: '',
             phone: '',
             isAdmin: false,
@@ -94,6 +98,9 @@ App({
           }
 
           await DbService.add('users', userInfo);
+          console.log('新用户注册成功');
+        } else {
+          console.log('老用户登录成功，成功关联历史数据');
         }
 
         // 写入缓存与全局状态
@@ -212,12 +219,14 @@ App({
   /**
    * 获取用户位置（高精度，已去重）
    */
+
   getLocation(options = {}) {
-    const { enableHighAccuracy = true } = options;
+    // 1. 新增 force 参数，默认为 false
+    const { enableHighAccuracy = true, force = false } = options;
 
     return new Promise((resolve, reject) => {
-      // 如果有缓存，直接返回
-      if (this._locationCache) {
+      // 2. 如果不强制刷新，且有缓存，才直接返回
+      if (this._locationCache && !force) {
         resolve(this._locationCache);
         return;
       }
@@ -233,11 +242,11 @@ App({
       this._locationLock = true;
 
       wx.getLocation({
-        type: 'gcj02',
+        type: 'gcj02', // 保持全系统统一使用 gcj02
         isHighAccuracy: enableHighAccuracy,
         highAccuracyExpireTime: 5000,
         success: (res) => {
-          console.log('获取位置成功:', res);
+          console.log(force ? '【打卡】强制获取最新位置成功:' : '【首页】获取缓存位置成功:', res);
 
           const locationData = {
             latitude: res.latitude,
