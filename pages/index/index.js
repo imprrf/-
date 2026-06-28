@@ -62,6 +62,7 @@ Page({
   checkLoginStatus() {
     const isLogin = app.globalData.isLogin;
     const userInfo = app.globalData.userInfo;
+    console.log('【调试】当前 userInfo 内容:', userInfo);
     const config = app.globalData.config;
     if (this._isUnloaded) return;
     this.setData({
