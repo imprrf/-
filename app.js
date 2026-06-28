@@ -73,45 +73,33 @@ App({
   
         const db = wx.cloud.database();
   
-        // 2. 先尝试用 _openid 查询
+        // 2. 统一只用云开发原生的 _openid 查询
         let queryResult = await db.collection('users').where({
           _openid: openid
         }).get();
         console.log('查询 _openid 结果:', queryResult.data);
   
-        // 如果没找到，尝试用 openid（不带下划线）查询
-        if (queryResult.data.length === 0) {
-          queryResult = await db.collection('users').where({
-            openid: openid
-          }).get();
-          console.log('查询 openid 结果:', queryResult.data);
-        }
-  
-        // 如果还没找到，打印所有用户记录（帮助排查）
-        if (queryResult.data.length === 0) {
-          const allUsers = await db.collection('users').get();
-          console.log('数据库中所有用户记录:', allUsers.data);
-        }
-  
         let userInfo = null;
         if (queryResult.data.length > 0) {
           userInfo = queryResult.data[0];
           console.log('老用户登录成功，成功关联历史数据');
+          
           // 字段映射：如果有 realName 则赋给 name
           if (userInfo.realName) {
             userInfo.name = userInfo.realName;
           }
           userInfo.phone = userInfo.phone || '';
         } else {
-          // 新用户注册
+          // 新用户注册（这里不再往数据库存 openid 字段，只保留基本业务字段）
+          // 云开发会自动帮你在数据库记录中生成一个系统的 _openid 字段
           userInfo = {
-            openid,
             name: '微信用户',
             avatar: '',
             phone: '',
             isAdmin: false,
             createTime: Date.now()
           };
+          
           // 检查是否为第一个用户
           const countResult = await db.collection('users').count();
           if (countResult.total === 0) {
@@ -123,6 +111,9 @@ App({
           });
           console.log('新用户注册成功');
         }
+  
+        // 【关键兼容】在内存中为对象补上 openid 属性，防止后续页面因读取 userInfo.openid 而崩溃
+        userInfo.openid = openid;
   
         // 3. 写入缓存与全局状态
         wx.setStorageSync('openid', openid);
@@ -143,7 +134,6 @@ App({
       }
     });
   },
-
   /**
    * 同步用户信息到数据库
    */
@@ -192,7 +182,7 @@ App({
       latitude: 29.55565896,
       longitude: 106.23342499,
       radius: 300,
-      name: '重庆西永考勤点'
+      name: '璧山机电大学高能束实验室'
     };
 
     try {

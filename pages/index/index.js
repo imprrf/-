@@ -127,7 +127,7 @@ Page({
     });
   },
 
-  // ========== 【流式状态机重构】加载今日记录并配对 ==========
+  // ==================== 【已修复】混合格式双控状态机 ====================
   async loadTodayRecords() {
     if (!app.globalData.isLogin) return;
     const db = wx.cloud.database();
@@ -137,61 +137,69 @@ Page({
     try {
       const res = await db.collection('records')
         .where({ date: dateStr })
-        .orderBy('timestamp', 'asc')
         .get();
 
       if (this._isUnloaded) return;
       const records = res.data;
-      console.log('今日原始记录:', records);
+
+      // 强行按照时间戳升序排序，确保新老数据交织时顺序不乱
+      const sortedRecords = records.sort((a, b) => {
+        const timeA = a.timestamp || a.checkInTimestamp || 0;
+        const timeB = b.timestamp || b.checkInTimestamp || 0;
+        return timeA - timeB;
+      });
 
       let paired = [];
-      let currentIn = null; // 用于缓存当前未配对的签入记录
+      let currentIn = null; // 专门用来配对老版本 type="in"/"out" 的指针
 
-      for (let i = 0; i < records.length; i++) {
-        const r = records[i];
-        const type = r.type || 'in';
-
-        if (type === 'in') {
-          // 容错：如果之前已经有一个 in 了，说明上一次漏签退了
+      for (let i = 0; i < sortedRecords.length; i++) {
+        const r = sortedRecords[i];
+        
+        if (r.status === 'Incomplete') {
+          // 新格式：上班了，下班还没打
           if (currentIn) {
-            paired.push({
-              inTime: currentIn.time,
-              outTime: '漏签退',
-              duration: '--'
-            });
+            paired.push({ inTime: currentIn.time, outTime: '漏签退', duration: '--' });
+            currentIn = null;
           }
-          currentIn = r; // 将当前签入点记作起点
-        } else if (type === 'out') {
+          paired.push({ inTime: r.checkInTime || '--', outTime: '进行中', duration: '--' });
+        } 
+        else if (r.status === 'Complete') {
+          // 新格式：完美合并的一体化数据
           if (currentIn) {
-            // 完美配对
-            const duration = r.timestamp - currentIn.timestamp;
-            paired.push({
-              inTime: currentIn.time,
-              outTime: r.time,
-              duration: this.formatDuration(duration)
-            });
-            currentIn = null; // 成功闭合，释放指针
-          } else {
-            // 容错：没有签入直接离场
-            paired.push({
-              inTime: '漏签到',
-              outTime: r.time,
-              duration: '--'
-            });
+            paired.push({ inTime: currentIn.time, outTime: '漏签退', duration: '--' });
+            currentIn = null;
+          }
+          paired.push({ inTime: r.checkInTime || '--', outTime: r.checkOutTime || '--', duration: r.totalWorkTime || '--' });
+        } 
+        else {
+          // 降级兼容：老版本单独进出的记录
+          const type = r.type || 'in';
+          if (type === 'in') {
+            if (currentIn) {
+              paired.push({ inTime: currentIn.time, outTime: '漏签退', duration: '--' });
+            }
+            currentIn = r;
+          } else if (type === 'out') {
+            if (currentIn) {
+              const duration = (r.timestamp || 0) - (currentIn.timestamp || 0);
+              paired.push({
+                inTime: currentIn.time,
+                outTime: r.time,
+                duration: this.formatDuration(duration)
+              });
+              currentIn = null;
+            } else {
+              paired.push({ inTime: '漏签到', outTime: r.time, duration: '--' });
+            }
           }
         }
       }
 
-      // 重点：当全部记录跑完后，如果 currentIn 还有值，说明最后一次打卡是“进入”，且还没走
+      // 收尾清扫
       if (currentIn) {
-        paired.push({
-          inTime: currentIn.time,
-          outTime: '进行中',
-          duration: '--'
-        });
+        paired.push({ inTime: currentIn.time, outTime: '进行中', duration: '--' });
       }
 
-      console.log('配对结果:', paired);
       this.setData({
         pairedRecords: paired,
         hasRecord: paired.length > 0
@@ -292,77 +300,111 @@ Page({
     });
   },
 
-  // ========== 核心打卡方法（无限制，只记录位置） ==========
-  async onClock() {
-    if (!this.data.canClock) {
-      wx.showToast({ title: '请稍后再试', icon: 'none' });
-      return;
-    }
-    if (!app.globalData.isLogin) {
-      wx.showToast({ title: '请先登录', icon: 'none' });
-      return;
-    }
+// ==================== 【已修复 null 冲突】打卡决策 ====================
+async onClock() {
+  if (!this.data.canClock) {
+    wx.showToast({ title: '请稍后再试', icon: 'none' });
+    return;
+  }
+  if (!app.globalData.isLogin) {
+    wx.showToast({ title: '请先登录', icon: 'none' });
+    return;
+  }
 
-    const now = new Date();
-    const dateStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
-    const timeStr = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+  const now = new Date();
+  const dateStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+  const timeStr = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
 
-    let location = null;
-    try {
-      const locRes = await app.getLocation({ enableHighAccuracy: true, force: true });
-      location = {
-        latitude: locRes.latitude,
-        longitude: locRes.longitude
-      };
-      console.log('真实打卡位置记录(gcj02):', location);
-    } catch (e) {
-      console.log('获取打卡位置失败，打卡继续，不记录位置', e);
-    }
-
-    const db = wx.cloud.database();
-    let existing = [];
-    try {
-      const res = await db.collection('records')
-        .where({ date: dateStr })
-        .orderBy('timestamp', 'asc')
-        .get();
-      existing = res.data;
-    } catch (e) {
-      wx.showToast({ title: '查询记录失败', icon: 'none' });
-      return;
-    }
-
-    let type = 'in';
-    if (existing.length > 0) {
-      const last = existing[existing.length - 1];
-      const lastType = last.type || 'in';
-      if (lastType === 'in') type = 'out';
-    }
-
-    const record = {
-      date: dateStr,
-      time: timeStr,
-      timestamp: now.getTime(),
-      type: type,
-      location: location
+  let location = null;
+  try {
+    const locRes = await app.getLocation({ enableHighAccuracy: true, force: true });
+    location = {
+      latitude: locRes.latitude,
+      longitude: locRes.longitude,
+      name: (this.data.config && this.data.config.location && this.data.config.location.name) || '指定考勤点'
     };
+    console.log('真实打卡位置记录(gcj02):', location);
+  } catch (e) {
+    console.log('获取打卡位置失败，打卡继续，不记录位置', e);
+  }
 
-    try {
-      wx.showLoading({ title: '打卡中...', mask: true });
-      await db.collection('records').add({ data: record });
-      wx.hideLoading();
-      if (this._isUnloaded) return;
-      await this.loadTodayRecords();
-      const typeName = type === 'in' ? '进入' : '离开';
-      this.showCheckinResult('success', '✓', `${typeName}打卡成功 (${timeStr})`);
-    } catch (e) {
-      wx.hideLoading();
-      if (!this._isUnloaded) {
-        this.showCheckinResult('error', '✗', '打卡失败，请重试');
-        console.error(e);
-      }
+  const db = wx.cloud.database();
+  const _ = db.command; // 👈 核心：引入云数据库指令集
+  
+  // 查找今天有没有挂起的“未完成”打卡记录
+  let incompleteRecord = null;
+  try {
+    const res = await db.collection('records')
+      .where({ 
+        date: dateStr,
+        status: 'Incomplete'
+      })
+      .get();
+    if (res.data.length > 0) {
+      incompleteRecord = res.data[0];
     }
-  },
+  } catch (e) {
+    wx.showToast({ title: '查询数据库失败', icon: 'none' });
+    return;
+  }
+
+  try {
+    wx.showLoading({ title: '打卡中...', mask: true });
+    let typeName = '';
+    const uInfo = app.globalData.userInfo || {};
+
+    if (!incompleteRecord) {
+      // Branch A: 没有挂起记录 -> 新建上班卡
+      typeName = '进入';
+      const newRecord = {
+        date: dateStr,
+        timestamp: now.getTime(),
+        userName: uInfo.name || '微信用户', 
+        userPhone: uInfo.phone || '',       
+        
+        checkInTime: timeStr,
+        checkInTimestamp: now.getTime(),
+        checkInLocation: location,
+        
+        checkOutTime: null,
+        checkOutTimestamp: null,
+        checkOutLocation: {}, // 👈 优化：初始化为空对象 {}，防止以后更新遇到 null 报错
+        totalWorkTime: null,
+        status: 'Incomplete'
+      };
+      await db.collection('records').add({ data: newRecord });
+
+    } else {
+      // Branch B: 有挂起记录 -> 更新下班卡
+      typeName = '离开';
+      const durationMs = now.getTime() - incompleteRecord.checkInTimestamp;
+      const formattedDuration = this.formatDuration(durationMs);
+
+      // 👈 核心修复：使用 _.set() 强行覆盖原本为 null 的字段，打破冲突
+      await db.collection('records').doc(incompleteRecord._id).update({
+        data: {
+          checkOutTime: timeStr,
+          checkOutTimestamp: now.getTime(),
+          checkOutLocation: _.set(location || {}), 
+          totalWorkTime: formattedDuration,
+          status: 'Complete'
+        }
+      });
+    }
+
+    wx.hideLoading();
+    if (this._isUnloaded) return;
+    
+    await this.loadTodayRecords();
+    this.showCheckinResult('success', '✓', `${typeName}打卡成功 (${timeStr})`);
+  } catch (e) {
+    wx.hideLoading();
+    if (!this._isUnloaded) {
+      this.showCheckinResult('error', '✗', '打卡失败，请重试');
+      console.error('【打卡异常底层日志】详细错误报告:', e); 
+    }
+  }
+},
 
   showCheckinResult(type, icon, message) {
     if (this._isUnloaded) return;
