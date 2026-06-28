@@ -1,4 +1,3 @@
-<!-- pages/index/index.wxml - 打卡首页 -->
 <view class="page-container">
   <!-- 未登录提示 -->
   <view wx:if="{{!isLogin}}" class="login-tip card">
@@ -18,13 +17,12 @@
       <view class="current-week">{{currentWeek}}</view>
     </view>
 
-    <!-- 今日打卡记录卡片（配对显示） -->
+    <!-- 今日打卡记录卡片 -->
     <view class="status-card card">
       <view class="status-header">
         <text class="status-title">今日打卡记录</text>
         <text class="status-date">{{todayStr}}</text>
       </view>
-      
       <view class="record-list">
         <view wx:if="{{pairedRecords.length === 0}}" class="no-record">今日暂无打卡</view>
         <view wx:for="{{pairedRecords}}" wx:key="index" class="record-item">
@@ -37,16 +35,12 @@
     <!-- 打卡按钮 -->
     <view class="checkin-area card">
       <view class="buttons-header">
-        <!-- 移除考勤时间显示 -->
         <text class="location-info" bindtap="onCheckLocation">
           <text class="location-icon">📍</text>
           {{config.location.name}}
         </text>
       </view>
-
       <button class="btn-checkin" bindtap="onClock">点击打卡</button>
-
-      <!-- 打卡结果提示 -->
       <view class="checkin-result" wx:if="{{checkinResult}}">
         <text class="result-icon {{checkinResult.type}}">{{checkinResult.icon}}</text>
         <text class="result-text">{{checkinResult.message}}</text>
@@ -72,16 +66,19 @@
       </view>
     </view>
 
-    <!-- 定位信息 -->
+    <!-- 定位信息（只保留当前位置，隐藏距离） -->
     <view class="location-card card" wx:if="{{currentLocation}}">
       <view class="location-row">
         <text class="location-label">当前位置：</text>
         <text class="location-value">{{currentLocationText}}</text>
       </view>
+      <!-- 距离行已被注释掉
       <view class="location-row">
         <text class="location-label">距离考勤点：</text>
         <text class="location-value {{distanceClass}}">{{distanceText}}</text>
       </view>
+      -->
     </view>
-  </block>
+
+  </block>  <!-- 这里是闭合 block wx:else -->
 </view>
