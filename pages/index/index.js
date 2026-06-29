@@ -130,7 +130,16 @@ Page({
   // ==================== 【已修复】混合格式双控状态机 ====================
   async loadTodayRecords() {
     if (!app.globalData.isLogin) return;
-    const db = wx.cloud.database();
+    const db = app.getCloudDatabase();
+    if (!db) {
+      if (!this._isUnloaded) {
+        this.setData({
+          pairedRecords: [],
+          hasRecord: false
+        });
+      }
+      return;
+    }
     const today = new Date();
     const dateStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
     
@@ -328,7 +337,11 @@ async onClock() {
     console.log('获取打卡位置失败，打卡继续，不记录位置', e);
   }
 
-  const db = wx.cloud.database();
+  const db = app.getCloudDatabase();
+  if (!db) {
+    wx.showToast({ title: '云服务不可用', icon: 'none' });
+    return;
+  }
   const _ = db.command; // 👈 核心：引入云数据库指令集
   
   // 查找今天有没有挂起的“未完成”打卡记录

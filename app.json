@@ -5,9 +5,9 @@
     "pages/mine/mine",
     "pages/admin/admin",
     "pages/admin/userList",
+    "pages/admin/userDetail",
     "pages/admin/locationSet",
     "pages/admin/periodsSet"
-
   ],
   "window": {
     "navigationBarBackgroundColor": "#1890ff",

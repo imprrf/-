@@ -1,5 +1,4 @@
 const app = getApp();
-const db = wx.cloud.database();
 
 Page({
   data: {
@@ -45,6 +44,12 @@ Page({
 
   // 保存到云数据库
   savePeriods() {
+    const db = app.getCloudDatabase ? app.getCloudDatabase() : null;
+    if (!db) {
+      wx.showToast({ title: '云服务不可用', icon: 'none' });
+      return;
+    }
+
     wx.showLoading({ title: '保存中' });
     db.collection('config').doc('main_config').update({
       data: { periods: this.data.periods }

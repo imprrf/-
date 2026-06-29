@@ -1,93 +1,92 @@
-<!-- 成员管理后台 + 点击“应到天数”10次激活 -->
-<view class="admin-container">
-
-<!-- ===== 统计卡片（始终显示） ===== -->
-<view class="stats-grid">
-  <!-- 总打卡次数 -->
-  <view class="stat-card">
-    <text class="stat-num">{{totalRecords || 0}}</text>
-    <text class="stat-label">总打卡次数</text>
+<!-- pages/admin/admin.wxml - 系统配置页面 -->
+<view class="page-container">
+  <!-- 页面标题 -->
+  <view class="page-header">
+    <text class="page-title">系统配置</text>
   </view>
 
-  <!-- 总在岗时长 -->
-  <view class="stat-card">
-    <text class="stat-num">{{totalHours || '0'}}h</text>
-    <text class="stat-label">总在岗时长</text>
-  </view>
-
-  <!-- 今日打卡 -->
-  <view class="stat-card">
-    <text class="stat-num">{{todayCount || 0}}</text>
-    <text class="stat-label">今日打卡</text>
-  </view>
-
-  <!-- 应到天数（点击10次激活） -->
-  <view class="stat-card secret-card" bindtap="onSecretTap">
-    <text class="stat-num">{{shouldWorkDays || '--'}}</text>
-    <text class="stat-label">
-      应到天数
-      <text wx:if="{{!isAdmin}}" class="badge">点击10次激活</text>
-      <text wx:else class="badge admin-badge">✅ 已激活</text>
-    </text>
-    <!-- 显示点击进度（仅未激活时） -->
-    <text wx:if="{{!isAdmin && tapCount > 0}}" class="tap-progress">
-      已点击 {{tapCount}}/10
-    </text>
-  </view>
-</view>
-
-<!-- ===== 权限提示（未激活时显示） ===== -->
-<view wx:if="{{!isAdmin}}" class="auth-tip">
-  <text>🔑 连续点击“应到天数”卡片 10 次可开启管理员权限</text>
-</view>
-
-<!-- ===== 管理员功能（仅激活后显示） ===== -->
-<block wx:if="{{isAdmin}}">
-  <!-- 筛选栏 -->
-  <view class="filter-bar">
-    <view class="filter-item">
-      <text class="label">起始日期</text>
-      <picker mode="date" value="{{startDate}}" bindchange="onStartDateChange">
-        <view class="picker">{{startDate || '请选择'}}</view>
-      </picker>
+  <!-- 通用设置 -->
+  <view class="card">
+    <view class="card-title">
+      <text class="title-text">通用设置</text>
     </view>
-    <view class="filter-item">
-      <text class="label">结束日期</text>
-      <picker mode="date" value="{{endDate}}" bindchange="onEndDateChange">
-        <view class="picker">{{endDate || '请选择'}}</view>
-      </picker>
-    </view>
-    <view class="filter-item">
-      <text class="label">选择用户</text>
-      <picker mode="selector" range="{{userList}}" range-key="name" bindchange="onUserChange">
-        <view class="picker">{{selectedUserName || '全部用户'}}</view>
-      </picker>
-    </view>
-    <button class="btn-filter" bindtap="loadData">🔍 查询</button>
-  </view>
-
-  <!-- 记录列表 -->
-  <view class="record-table">
-    <view class="table-header">
-      <text class="col-date">日期</text>
-      <text class="col-user">用户</text>
-      <text class="col-time">进入</text>
-      <text class="col-time">离开</text>
-      <text class="col-duration">时长</text>
-    </view>
-    <scroll-view scroll-y class="table-body">
-      <view wx:if="{{filteredRecords.length === 0}}" class="empty-tip">
-        📭 暂无匹配记录
+    <view class="setting-list">
+      <view class="setting-item">
+        <view class="setting-left">
+          <text class="setting-icon">🔔</text>
+          <text class="setting-label">消息通知提醒</text>
+        </view>
+        <switch checked disabled color="#1890ff" />
       </view>
-      <view wx:for="{{filteredRecords}}" wx:key="index" class="table-row">
-        <text class="col-date">{{item.date}}</text>
-        <text class="col-user">{{item.userName}}</text>
-        <text class="col-time">{{item.inTime || '--'}}</text>
-        <text class="col-time">{{item.outTime || '--'}}</text>
-        <text class="col-duration">{{item.duration || '--'}}</text>
+      <view class="setting-item">
+        <view class="setting-left">
+          <text class="setting-icon">📍</text>
+          <text class="setting-label">打卡自动定位</text>
+        </view>
+        <switch checked disabled color="#1890ff" />
+      </view>
+      <view class="setting-item">
+        <view class="setting-left">
+          <text class="setting-icon">🗑️</text>
+          <text class="setting-label">清除本地缓存</text>
+        </view>
+        <text class="setting-arrow">›</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 管理员后台 -->
+  <view class="card" wx:if="{{isAdmin}}">
+    <view class="card-title">
+      <text class="title-text">👑 团队打卡总览</text>
+      <text class="subtitle">今日最新打卡记录</text>
+    </view>
+    
+    <scroll-view scroll-y class="records-scroll" wx:if="{{memberRecords.length > 0}}">
+      <view class="record-item" wx:for="{{memberRecords}}" wx:key="_id">
+        <view class="record-header">
+          <view class="user-info">
+            <text class="user-name">{{item.userName || item.user || '未知成员'}}</text>
+            <text class="user-date">{{item.date || ''}}</text>
+          </view>
+          <view class="status-badge">
+            {{item.status === 'Complete' || item.clockOut ? '已完成' : '进行中'}}
+          </view>
+        </view>
+        
+        <view class="record-body">
+          <view class="time-group">
+            <view class="time-item">
+              <text class="time-label">上班签到</text>
+              <text class="time-value">{{item.clockIn || item.checkInTime || '--:--'}}</text>
+            </view>
+            <view class="time-divider"></view>
+            <view class="time-item">
+              <text class="time-label">下班签退</text>
+              <text class="time-value">{{item.clockOut || item.checkOutTime || '--:--'}}</text>
+            </view>
+          </view>
+          
+          <view class="duration-row" wx:if="{{item.duration || item.totalWorkTime}}">
+            <text class="duration-text">⏱️ 工作时长：{{item.duration ? (item.duration + '分钟') : (item.totalWorkTime || '--')}}</text>
+          </view>
+          
+          <view class="location-row" wx:if="{{item.locationIn && item.locationIn.address || item.checkInLocation && item.checkInLocation.name}}">
+            <text class="location-text">📍 {{item.locationIn && item.locationIn.address || item.checkInLocation && item.checkInLocation.name || '未知位置'}}</text>
+          </view>
+        </view>
       </view>
     </scroll-view>
+    
+    <view class="empty-state" wx:else>
+      <text class="empty-icon">📂</text>
+      <text class="empty-text">今天暂时还没有打卡记录</text>
+    </view>
   </view>
-</block>
 
+  <!-- 页面底部 -->
+  <view class="page-footer">
+    <text class="copyright">© 璧山机电大学高能束实验室</text>
+    <text class="version" bindtap="tapSystemConfig">当前系统版本 v1.0.6 (Build 2026)</text>
+  </view>
 </view>

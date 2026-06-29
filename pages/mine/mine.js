@@ -59,20 +59,18 @@ Page({
       const records = await CheckinService.getMonthRecords(year, month) || [];
       if (this._isUnloaded) return;
 
-      let presentDays = 0, lateDays = 0, earlyDays = 0, absentDays = 0;
+      let presentDays = 0;
       if (Array.isArray(records)) {
         records.forEach(record => {
           if (!record) return;
-          const status = record.status || 'none';
-          if (status === 'normal') { presentDays++; }
-          else if (status === 'late') { presentDays++; lateDays++; }
-          else if (status === 'early') { presentDays++; earlyDays++; }
-          else if (status === 'late_early') { presentDays++; lateDays++; earlyDays++; }
-          else if (status === 'absent') { absentDays++; }
+          if (record.clockIn || record.clockOut) {
+            presentDays++;
+          }
         });
       }
       const workDays = this.getWorkDaysInMonth(year, month);
-      this.setData({ attendanceInfo: { workDays, presentDays, lateDays, earlyDays, absentDays } });
+      const absentDays = Math.max(0, workDays - presentDays);
+      this.setData({ attendanceInfo: { workDays, presentDays, absentDays } });
     } catch (e) {
       if (!this._isUnloaded) {
         console.error('加载考勤统计失败:', e);

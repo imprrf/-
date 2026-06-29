@@ -14,26 +14,82 @@ App({
     isAdmin: false,
     config: null,
     location: null,
-    hasLocationAuth: false
+    hasLocationAuth: false,
+    cloudReady: false,
+    cloudInitError: ''
   },
 
   onLaunch() {
       // 捕获未处理的Promise reject
-      wx.onUnhandledRejection((res) => {
-        console.error('未捕获的Promise异常:', res.reason);
-      });
+      if (typeof wx.onUnhandledRejection === 'function') {
+        wx.onUnhandledRejection((res) => {
+        const reason = res && res.reason;
+        const message = typeof reason === 'string'
+          ? reason
+          : (reason && reason.errMsg) || (reason && reason.message) || '';
 
-    // 1. 初始化云开发（必须最先执行，解决 Cloud API isn't enabled 报错）
-    wx.cloud.init({
-      env: 'cloud1-d4g22few1dfa58dd6',   // 你的云环境ID
-      traceUser: true
-    });
-    console.log('云开发初始化完成');
+        // 过滤微信开发者工具内部偶发的云服务握手噪音，避免误判为业务代码错误
+        if (message.includes('Failed to fetch') || message.includes('webapi_getwxaasyncsecinfo')) {
+          console.warn('已忽略开发者工具网络噪音:', message);
+          return;
+        }
 
-    // 2. 检查登录状态
+        console.error('未捕获的Promise异常:', reason);
+        });
+      }
+
+    // 1. 检查登录状态
     this.checkLogin();
-    // 3. 加载全局配置
+    // 2. 加载全局配置
     this.loadConfig();
+  },
+
+  initCloudSafely() {
+    if (!wx.cloud || typeof wx.cloud.init !== 'function') {
+      this.globalData.cloudReady = false;
+      this.globalData.cloudInitError = '当前基础库不支持云开发';
+      console.warn(this.globalData.cloudInitError);
+      return false;
+    }
+
+    try {
+      wx.cloud.init({
+        env: 'cloud1-d4g22few1dfa58dd6',
+        traceUser: true
+      });
+      this.globalData.cloudReady = true;
+      this.globalData.cloudInitError = '';
+      console.log('云开发初始化完成');
+      return true;
+    } catch (e) {
+      this.globalData.cloudReady = false;
+      this.globalData.cloudInitError = e && e.message ? e.message : '云开发初始化失败';
+      console.error('云开发初始化失败，已切换为降级模式:', e);
+      return false;
+    }
+  },
+
+  ensureCloudReady() {
+    if (this.globalData.cloudReady) {
+      return true;
+    }
+
+    return this.initCloudSafely();
+  },
+
+  getCloudDatabase() {
+    if (!this.ensureCloudReady()) {
+      return null;
+    }
+
+    try {
+      return wx.cloud.database();
+    } catch (e) {
+      this.globalData.cloudReady = false;
+      this.globalData.cloudInitError = e && e.message ? e.message : '云数据库不可用';
+      console.error('获取云数据库失败:', e);
+      return null;
+    }
   },
 
   /**
@@ -60,6 +116,10 @@ App({
     return new Promise(async (resolve, reject) => {
       try {
         wx.showLoading({ title: '登录中...', mask: true });
+
+        if (!this.ensureCloudReady()) {
+          throw new Error(this.globalData.cloudInitError || '云开发不可用，请检查开发者工具网络或云环境配置');
+        }
   
         // 1. 获取 openid
         const cloudRes = await wx.cloud.callFunction({

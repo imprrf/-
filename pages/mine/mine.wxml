@@ -39,10 +39,6 @@
         <text class="info-label">实际出勤</text>
       </view>
       <view class="info-item">
-        <text class="info-value text-error">{{attendanceInfo.lateDays + attendanceInfo.earlyDays}}</text>
-        <text class="info-label">异常次数</text>
-      </view>
-      <view class="info-item">
         <text class="info-value text-secondary">{{attendanceInfo.absentDays}}</text>
         <text class="info-label">缺卡天数</text>
       </view>

@@ -1,308 +1,146 @@
-const app = getApp()
+// pages/admin/admin.js
+const app = getApp();
 
 Page({
+  /**
+   * 页面的初始数据
+   */
   data: {
-    // ===== 权限相关 =====
+    clickCount: 0,
     isAdmin: false,
-    tapCount: 0,                // 连续点击计数
-    lastTapTime: 0,             // 上次点击时间（用于判断连续点击）
-
-    // ===== 统计数据 =====
-    totalRecords: 0,
-    totalHours: 0,
-    todayCount: 0,
-
-    // ===== 筛选条件 =====
-    startDate: '',
-    endDate: '',
-    userList: [],
-    selectedUserOpenId: '',
-    selectedUserName: '全部用户',
-
-    // ===== 记录列表 =====
-    filteredRecords: [],
-    allRawRecords: []
+    memberRecords: [] // 存放团队全员的打卡记录
   },
 
-  onLoad() {
-    this.initDates()
-    this.checkAdmin()
-  },
-
-  onShow() {
-    // 每次显示时刷新（如果已是管理员）
-    if (this.data.isAdmin) {
-      this.loadUserList()
-      this.loadData()
-    }
-  },
-
-  // ========== 1. 权限检查 ==========
-  async checkAdmin() {
-    const db = wx.cloud.database()
-    try {
-      const openid = app.globalData.userInfo?.openid || ''
-      if (!openid) {
-        // 未登录，等一会再试
-        setTimeout(() => this.checkAdmin(), 500)
-        return
-      }
-      const res = await db.collection('admins').where({ openid }).get()
-      const isAdmin = res.data.length > 0
-      this.setData({ isAdmin })
-      if (isAdmin) {
-        // 是管理员，加载数据
-        this.loadUserList()
-        this.loadData()
-      }
-    } catch (e) {
-      console.log('权限检查失败', e)
-      // 可能是 admins 集合不存在，静默失败，用户可通过点击激活
-      this.setData({ isAdmin: false })
-    }
-  },
-
-  // ========== 2. 点击10次激活管理员 ==========
-  onSecretTap() {
-    const now = Date.now()
-    const { tapCount, lastTapTime } = this.data
-
-    // 如果距离上次点击超过2秒，重置计数（防止用户慢慢点）
-    if (now - lastTapTime > 2000) {
-      this.setData({ tapCount: 1, lastTapTime: now })
-      return
-    }
-
-    const newCount = tapCount + 1
-    this.setData({ tapCount: newCount, lastTapTime: now })
-
-    // 达到10次，激活管理员
-    if (newCount >= 10) {
-      this.activateAdmin()
-      this.setData({ tapCount: 0 })
-    }
-  },
-
-  // ========== 3. 激活管理员（写入 admins 集合） ==========
-  async activateAdmin() {
-    try {
-      const db = wx.cloud.database()
-      const openid = app.globalData.userInfo?.openid || ''
-
-      if (!openid) {
-        wx.showToast({ title: '请先登录', icon: 'none' })
-        return
-      }
-
-      // 先检查是否已是管理员
-      const checkRes = await db.collection('admins').where({ openid }).get()
-      if (checkRes.data.length > 0) {
-        wx.showToast({ title: '已是管理员', icon: 'success' })
-        this.setData({ isAdmin: true })
-        this.loadUserList()
-        this.loadData()
-        return
-      }
-
-      // 写入 admins 集合（如果集合不存在，首次写入会自动创建）
-      await db.collection('admins').add({ data: { openid } })
-
-      wx.showToast({ title: '🎉 管理员权限已开启', icon: 'success' })
-      this.setData({ isAdmin: true })
-      app.globalData.isAdmin = true
-
-      // 加载数据
-      this.loadUserList()
-      this.loadData()
-
-    } catch (e) {
-      console.error('激活管理员失败', e)
-      // 如果集合不存在，尝试重新创建
-      if (e.errCode === -502005) {
-        wx.showToast({ title: '请先创建 admins 集合', icon: 'none' })
-      } else {
-        wx.showToast({ title: '激活失败，请重试', icon: 'none' })
-      }
-    }
-  },
-
-  // ========== 4. 初始化日期 ==========
-  initDates() {
-    const now = new Date()
-    const year = now.getFullYear()
-    const month = String(now.getMonth() + 1).padStart(2, '0')
-    const day = String(now.getDate()).padStart(2, '0')
-    const today = `${year}-${month}-${day}`
+  /**
+   * 生命周期函数--监听页面加载
+   */
+  onLoad(options) {
+    // 1. 初始化时，直接读取全局的管理员权限状态，彻底抛弃旧的 admins 独立表查询
+    const currentAdminStatus = app.globalData.isAdmin || false;
+    
     this.setData({
-      startDate: `${year}-${month}-01`,
-      endDate: today
-    })
-  },
+      isAdmin: currentAdminStatus
+    });
 
-  // ========== 5. 加载用户列表 ==========
-  async loadUserList() {
-    const db = wx.cloud.database()
-    try {
-      const res = await db.collection('users').get()
-      const list = res.data.map(u => ({
-        openid: u._openid,
-        name: u.nickName || u.userInfo?.nickName || '未知'
-      }))
-      this.setData({ userList: list })
-    } catch (e) {
-      console.log('加载用户列表失败', e)
+    // 2. 如果早就是管理员，直接加载团队全员数据
+    if (currentAdminStatus) {
+      this.loadAllMembersData();
     }
   },
 
-  // ========== 6. 核心：加载打卡记录 ==========
-  async loadData() {
-    if (!this.data.isAdmin) {
-      wx.showToast({ title: '无权限', icon: 'none' })
-      return
-    }
-
-    wx.showLoading({ title: '加载中...' })
-    const db = wx.cloud.database()
-    const _ = db.command
-
-    try {
-      const { startDate, endDate, selectedUserOpenId } = this.data
-
-      const where = {}
-      if (startDate && endDate) {
-        where.date = _.gte(startDate).and(_.lte(endDate))
-      }
-      if (selectedUserOpenId) {
-        where._openid = selectedUserOpenId
-      }
-
-      const res = await db.collection('records')
-        .where(where)
-        .orderBy('timestamp', 'asc')
-        .limit(1000)
-        .get()
-
-      wx.hideLoading()
-
-      const records = res.data || []
-
-      // 补充用户名
-      const userMap = {}
-      this.data.userList.forEach(u => {
-        userMap[u.openid] = u.name
-      })
-      const enriched = records.map(r => ({
-        ...r,
-        userName: userMap[r._openid] || r._openid.substring(0, 8) + '...'
-      }))
-
-      const paired = this.pairRecords(enriched)
-
-      // 统计
-      const totalRecords = records.length
-      const totalHours = paired.reduce((sum, p) => {
-        if (p.durationNum) return sum + p.durationNum
-        return sum
-      }, 0)
-      const today = new Date().toISOString().slice(0, 10)
-      const todayCount = records.filter(r => r.date === today).length
-
-      this.setData({
-        allRawRecords: enriched,
-        filteredRecords: paired,
-        totalRecords,
-        totalHours: (totalHours / 3600).toFixed(1),
-        todayCount
-      })
-
-    } catch (e) {
-      wx.hideLoading()
-      console.error('加载数据失败:', e)
-      wx.showToast({ title: '加载失败: ' + (e.errMsg || e.message), icon: 'none' })
+  /**
+   * 生命周期函数--监听页面显示
+   */
+  onShow() {
+    // 每次切回页面时，如果是管理员则自动刷新一次数据
+    if (this.data.isAdmin) {
+      this.loadAllMembersData();
     }
   },
 
-  // ========== 7. 配对逻辑 ==========
-  pairRecords(records) {
-    const userMap = {}
-    records.forEach(r => {
-      if (!userMap[r._openid]) userMap[r._openid] = []
-      userMap[r._openid].push(r)
-    })
+  /**
+   * 完美的隐藏式彩蛋逻辑：连点 10 次版本号
+   */
+  async tapSystemConfig() {
+    // 细节1：如果本来就是管理员了，狂点也直接拦截，假装是死文本，绝不提示“您已经是管理员”
+    if (this.data.isAdmin) return;
 
-    const result = []
-    Object.keys(userMap).forEach(openid => {
-      const list = userMap[openid].sort((a, b) => a.timestamp - b.timestamp)
-      const userName = list[0]?.userName || openid.substring(0, 8)
-      let i = 0
-      while (i < list.length) {
-        const cur = list[i]
-        const type = cur.type || 'in'
-        if (type === 'in' && i + 1 < list.length && (list[i+1].type || 'in') === 'out') {
-          const inRec = list[i]
-          const outRec = list[i+1]
-          const durationSec = (outRec.timestamp - inRec.timestamp) / 1000
-          result.push({
-            date: inRec.date,
-            userName,
-            inTime: inRec.time,
-            outTime: outRec.time,
-            duration: this.formatDuration(durationSec),
-            durationNum: durationSec
-          })
-          i += 2
-        } else if (type === 'in') {
-          result.push({
-            date: cur.date,
-            userName,
-            inTime: cur.time,
-            outTime: '进行中',
-            duration: '--',
-            durationNum: 0
-          })
-          i++
-        } else {
-          i++
+    this.data.clickCount = (this.data.clickCount || 0) + 1;
+    
+    // 细节2：在没有点满 10 次之前，保持绝对死寂，不弹窗、不打印日志，防止日常误触泄露
+    if (this.data.clickCount >= 10) {
+      this.data.clickCount = 0; // 触发后计数器立刻复位
+
+      try {
+        // 细节3：加载框文案伪装为普通的系统“加载中...”，绝不出现“提升权限”等敏感字眼
+        wx.showLoading({ title: '加载中...', mask: true });
+        
+        const db = app.getCloudDatabase();
+        if (!db) {
+          wx.hideLoading();
+          return;
         }
+        const openid = app.globalData.openid || wx.getStorageSync('openid');
+        
+        if (!openid) {
+          wx.hideLoading();
+          return; // 极端情况：没登录则静默退出
+        }
+
+        // 1. 精准锁定当前用户在原有 users 表中的记录
+        const userQuery = await db.collection('users').where({ _openid: openid }).get();
+        if (userQuery.data.length === 0) {
+          wx.hideLoading();
+          return; // 查无此人则静默拦截
+        }
+
+        const userDocId = userQuery.data[0]._id;
+
+        // 2. 核心越权操作：直接在原有的 users 表里就地兼容，将 isAdmin 改为 true
+        await db.collection('users').doc(userDocId).update({
+          data: {
+            isAdmin: true
+          }
+        });
+
+        // 3. 内存与缓存双向同步，确保一次激活，终身免点
+        app.globalData.isAdmin = true;
+        if (app.globalData.userInfo) {
+          app.globalData.userInfo.isAdmin = true;
+          wx.setStorageSync('userInfo', app.globalData.userInfo);
+        }
+
+        wx.hideLoading();
+        
+        // 4. 仅在彻底成功的一瞬间抛出伪装过的专业提示
+        wx.showToast({
+          title: '核心模块已就绪',
+          icon: 'success',
+          duration: 2000
+        });
+
+        // 5. 瞬间在前端展开原本隐藏的数据面板，并加载数据
+        this.setData({ isAdmin: true });
+        this.loadAllMembersData();
+
+      } catch (e) {
+        wx.hideLoading();
+        // 即使出错也绝不在前端弹报错窗，只在控制台留下一串无意义的符号掩人耳目
+        console.log('---', e); 
       }
-    })
-    return result.sort((a, b) => b.date.localeCompare(a.date))
-  },
-
-  formatDuration(seconds) {
-    if (!seconds || seconds < 0) return '--'
-    const hrs = Math.floor(seconds / 3600)
-    const mins = Math.floor((seconds % 3600) / 60)
-    if (hrs > 0) return `${hrs}h${mins > 0 ? mins + 'm' : ''}`
-    else if (mins > 0) return `${mins}m`
-    else return '0m'
-  },
-
-  // ========== 8. 筛选事件 ==========
-  onStartDateChange(e) {
-    this.setData({ startDate: e.detail.value })
-  },
-  onEndDateChange(e) {
-    this.setData({ endDate: e.detail.value })
-  },
-  onUserChange(e) {
-    const index = e.detail.value
-    const user = this.data.userList[index]
-    if (user) {
-      this.setData({
-        selectedUserOpenId: user.openid,
-        selectedUserName: user.name
-      })
-    } else {
-      this.setData({
-        selectedUserOpenId: '',
-        selectedUserName: '全部用户'
-      })
     }
   },
 
-  // 刷新按钮
-  onRefresh() {
-    this.loadData()
+  /**
+   * 管理员特权功能：从 records 总表中抓取全员的打卡记录
+   */
+  async loadAllMembersData() {
+    if (!this.data.isAdmin) return;
+
+    try {
+      // 这里的 loading 可以公开，因为已经是管理员身份在看报表了
+      wx.showLoading({ title: '更新团队数据...' });
+      const db = app.getCloudDatabase();
+      if (!db) {
+        wx.hideLoading();
+        return;
+      }
+      
+      // 拉取全表最新的 50 条记录（由于之前你已经在云控制台放开了 records 表的“所有用户可读”，这里便能统揽全局）
+      const res = await db.collection('records')
+        .orderBy('timestamp', 'desc')
+        .limit(50)
+        .get();
+
+      this.setData({
+        memberRecords: res.data
+      });
+      
+      wx.hideLoading();
+    } catch (e) {
+      wx.hideLoading();
+      console.error('获取全员打卡记录失败:', e);
+      wx.showToast({ title: '数据同步失败', icon: 'none' });
+    }
   }
-})
+});

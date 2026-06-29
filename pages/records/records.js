@@ -15,7 +15,7 @@ Page({
 
   onLoad() {
     this._isUnloaded = false;
-    this.db = wx.cloud.database();
+    this.db = app.getCloudDatabase();
     const now = new Date();
     this.setData({
       year: now.getFullYear(),
@@ -30,7 +30,15 @@ Page({
 
   async loadRecords() {
     const { year, month } = this.data;
-    const db = this.db;
+    const db = this.db || app.getCloudDatabase();
+    this.db = db;
+    if (!db) {
+      if (!this._isUnloaded) {
+        this.setData({ calendarGrid: [] });
+        wx.showToast({ title: '云服务不可用', icon: 'none' });
+      }
+      return;
+    }
     const daysInMonth = new Date(year, month, 0).getDate();
     const startWeekDay = new Date(year, month - 1, 1).getDay();
 
@@ -96,7 +104,14 @@ Page({
     if (!date) return;
     this.setData({ selectedDate: date, showDetail: true });
 
-    const db = this.db;
+    const db = this.db || app.getCloudDatabase();
+    this.db = db;
+    if (!db) {
+      if (!this._isUnloaded) {
+        wx.showToast({ title: '云服务不可用', icon: 'none' });
+      }
+      return;
+    }
     try {
       const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('超时')), 8000));
       const query = db.collection('records')

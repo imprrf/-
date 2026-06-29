@@ -5,6 +5,7 @@
 
 const app = getApp();
 const DbService = require('../../services/DbService');
+const CheckinService = require('../../services/CheckinService');
 
 Page({
   data: {
@@ -49,11 +50,23 @@ Page({
         orderBy: { field: 'createTime', order: 'desc' }
       });
 
-      // 处理用户数据
-      const processedUsers = users.map(user => ({
-        ...user,
-        createTimeStr: this.formatDate(user.createTime),
-        stats: user.stats || { presentDays: 0, lateDays: 0, earlyDays: 0 }
+      // 获取当前年月
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = now.getMonth() + 1;
+
+      // 为每个用户计算统计数据
+      const processedUsers = await Promise.all(users.map(async user => {
+        const stats = await CheckinService.getStatistics(year, month, user.openid);
+        return {
+          ...user,
+          createTimeStr: this.formatDate(user.createTime),
+          stats: {
+            presentDays: stats.presentDays,
+            lateDays: stats.lateDays,
+            earlyDays: stats.earlyDays
+          }
+        };
       }));
 
       // 如果有搜索关键字，进行过滤
@@ -107,10 +120,8 @@ Page({
   onViewRecords(e) {
     const user = e.currentTarget.dataset.user;
     
-    wx.showModal({
-      title: '打卡记录',
-      content: `查看 ${user.name || '未知'} 的打卡记录功能开发中...`,
-      showCancel: false
+    wx.navigateTo({
+      url: `/pages/admin/userDetail?openid=${user.openid}&name=${encodeURIComponent(user.name || '成员')}`
     });
   },
 
