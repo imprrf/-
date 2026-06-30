@@ -1,0 +1,192 @@
+/**
+ * 考勤打卡小程序 - 全局样式
+ * @description 公共样式、颜色变量、通用类
+ */
+
+/* 主题色变量 */
+page {
+  --primary-color: #1890ff;
+  --success-color: #52c41a;
+  --warning-color: #faad14;
+  --error-color: #f5222d;
+  --text-color: #333333;
+  --text-secondary: #666666;
+  --text-placeholder: #999999;
+  --border-color: #e5e5e5;
+  --bg-color: #f5f5f5;
+  --white: #ffffff;
+}
+
+/* 通用页面容器 */
+.page-container {
+  min-height: 100vh;
+  background-color: var(--bg-color);
+  padding: 20rpx;
+  box-sizing: border-box;
+}
+
+/* 卡片样式 */
+.card {
+  background-color: var(--white);
+  border-radius: 16rpx;
+  padding: 30rpx;
+  margin-bottom: 20rpx;
+  box-shadow: 0 2rpx 12rpx rgba(0, 0, 0, 0.05);
+}
+
+/* 按钮样式 */
+.btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 44rpx;
+  font-size: 32rpx;
+  padding: 24rpx 0;
+  margin: 20rpx 0;
+}
+
+.btn-primary {
+  background-color: var(--primary-color);
+  color: var(--white);
+}
+
+.btn-success {
+  background-color: var(--success-color);
+  color: var(--white);
+}
+
+.btn-disabled {
+  background-color: #cccccc;
+  color: var(--white);
+}
+
+/* 状态标签 */
+.tag {
+  display: inline-block;
+  padding: 6rpx 16rpx;
+  border-radius: 8rpx;
+  font-size: 24rpx;
+}
+
+.tag-success {
+  background-color: #f6ffed;
+  color: var(--success-color);
+  border: 1rpx solid #b7eb8f;
+}
+
+.tag-warning {
+  background-color: #fffbe6;
+  color: var(--warning-color);
+  border: 1rpx solid #ffe58f;
+}
+
+.tag-error {
+  background-color: #fff1f0;
+  color: var(--error-color);
+  border: 1rpx solid #ffccc7;
+}
+
+.tag-default {
+  background-color: #f5f5f5;
+  color: var(--text-secondary);
+  border: 1rpx solid #d9d9d9;
+}
+
+/* 标题样式 */
+.title {
+  font-size: 36rpx;
+  font-weight: 600;
+  color: var(--text-color);
+  margin-bottom: 20rpx;
+}
+
+.subtitle {
+  font-size: 28rpx;
+  color: var(--text-secondary);
+  margin-bottom: 16rpx;
+}
+
+/* 列表项 */
+.list-item {
+  display: flex;
+  align-items: center;
+  padding: 24rpx 0;
+  border-bottom: 1rpx solid var(--border-color);
+}
+
+.list-item:last-child {
+  border-bottom: none;
+}
+
+/* 空状态 */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 100rpx 0;
+  color: var(--text-placeholder);
+}
+
+.empty-state .icon {
+  font-size: 120rpx;
+  margin-bottom: 20rpx;
+}
+
+.empty-state text {
+  font-size: 28rpx;
+}
+
+/* Flex工具类 */
+.flex {
+  display: flex;
+}
+
+.flex-col {
+  display: flex;
+  flex-direction: column;
+}
+
+.flex-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.flex-between {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.flex-around {
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+}
+
+/* 间距工具类 */
+.mt-10 { margin-top: 10rpx; }
+.mt-20 { margin-top: 20rpx; }
+.mt-30 { margin-top: 30rpx; }
+.mb-10 { margin-bottom: 10rpx; }
+.mb-20 { margin-bottom: 20rpx; }
+.mb-30 { margin-bottom: 30rpx; }
+.ml-10 { margin-left: 10rpx; }
+.ml-20 { margin-left: 20rpx; }
+.mr-10 { margin-right: 10rpx; }
+.mr-20 { margin-right: 20rpx; }
+.p-20 { padding: 20rpx; }
+.p-30 { padding: 30rpx; }
+
+/* 文字工具类 */
+.text-primary { color: var(--primary-color); }
+.text-success { color: var(--success-color); }
+.text-warning { color: var(--warning-color); }
+.text-error { color: var(--error-color); }
+.text-secondary { color: var(--text-secondary); }
+.text-center { text-align: center; }
+.text-right { text-align: right; }
+.text-bold { font-weight: bold; }
+.text-large { font-size: 40rpx; }
+.text-small { font-size: 24rpx; }

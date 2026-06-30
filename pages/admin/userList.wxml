@@ -1,0 +1,73 @@
+<!-- pages/admin/userList.wxml - 成员管理页面 -->
+<view class="page-container">
+  <!-- 搜索栏 -->
+  <view class="search-bar card">
+    <input 
+      class="search-input"
+      placeholder="搜索成员姓名或手机号"
+      value="{{searchKey}}"
+      bindinput="onSearchInput"
+      confirm-type="search"
+      bindconfirm="onSearch"
+    />
+    <view class="search-icon" bindtap="onSearch">
+      <text>🔍</text>
+    </view>
+  </view>
+
+  <!-- 成员列表 -->
+  <view class="user-list">
+    <view 
+      class="user-card card"
+      wx:for="{{users}}"
+      wx:key="openid"
+    >
+      <view class="user-header">
+        <view class="user-info">
+          <image 
+            class="user-avatar" 
+            src="{{item.avatar || '/assets/icons/default_avatar.png'}}" 
+            mode="aspectFill"
+          ></image>
+          <view class="user-detail">
+            <view class="name-row">
+              <text class="user-name">{{item.name || '未设置姓名'}}</text>
+              <text class="tag {{item.isAdmin ? 'tag-admin' : 'tag-member'}}">
+                {{item.isAdmin ? '管理员' : '成员'}}
+              </text>
+            </view>
+            <text class="user-phone">{{item.phone || '未绑定手机'}}</text>
+            <text class="user-time">注册：{{item.createTimeStr}}</text>
+          </view>
+        </view>
+      </view>
+      
+      <view class="user-stats">
+        <view class="stat-box">
+          <text class="stat-num text-success">{{item.stats.presentDays || 0}}</text>
+          <text class="stat-text">出勤</text>
+        </view>
+      </view>
+      
+      <view class="user-actions">
+        <view class="action-btn primary" bindtap="onViewRecords" data-user="{{item}}">
+          <text>📋 查看记录</text>
+        </view>
+        <view class="action-btn secondary" bindtap="onToggleAdmin" data-user="{{item}}">
+          <text>{{item.isAdmin ? '⚙️ 取消管理员' : '⚙️ 设为管理员'}}</text>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 空状态 -->
+  <view class="empty-state" wx:if="{{users.length === 0 && !loading}}">
+    <text class="empty-icon">👥</text>
+    <text class="empty-text">暂无成员数据</text>
+  </view>
+
+  <!-- 加载状态 -->
+  <view class="loading-state" wx:if="{{loading}}">
+    <text>加载中...</text>
+  </view>
+</view>

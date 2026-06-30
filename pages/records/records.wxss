@@ -1,0 +1,151 @@
+/* 日历容器 */
+.calendar-container {
+  padding: 20rpx;
+  background: #fff;
+}
+
+.calendar-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 36rpx;
+  font-weight: bold;
+  padding: 20rpx 0;
+}
+
+.arrow {
+  font-size: 48rpx;
+  padding: 0 30rpx;
+  color: #1890ff;
+}
+
+/* 星期行 */
+.week-row {
+  display: flex;
+  background: #f5f5f5;
+  border-radius: 8rpx;
+}
+
+.week-item {
+  flex: 1;
+  text-align: center;
+  padding: 15rpx 0;
+  font-size: 28rpx;
+  color: #666;
+}
+
+/* 日期网格 */
+.date-grid {
+  display: flex;
+  flex-wrap: wrap;
+}
+
+.date-cell {
+  width: calc(100% / 7);
+  aspect-ratio: 1;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  position: relative;
+}
+
+.day-num {
+  width: 70rpx;
+  height: 70rpx;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-size: 30rpx;
+  border-radius: 50%;
+  position: relative;
+}
+
+/* 圆点颜色 */
+.dot {
+  width: 12rpx;
+  height: 12rpx;
+  border-radius: 50%;
+  position: absolute;
+  bottom: 10rpx;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.dot.green {
+  background-color: #52c41a;
+}
+
+.dot.red {
+  background-color: #ff4d4f;
+}
+
+.dot.yellow {
+  background-color: #faad14;
+}
+
+/* 详情弹窗 */
+.detail-mask {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0,0,0,0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.detail-popup {
+  background: #fff;
+  border-radius: 16rpx;
+  padding: 30rpx;
+  width: 80%;
+  max-height: 70%;
+  overflow-y: auto;
+}
+
+.detail-title {
+  font-size: 32rpx;
+  font-weight: bold;
+  margin-bottom: 20rpx;
+}
+
+.record-item {
+  display: flex;
+  justify-content: space-between;
+  padding: 15rpx 0;
+  border-bottom: 1rpx solid #eee;
+}
+
+.status-tag {
+  font-size: 24rpx;
+  padding: 4rpx 12rpx;
+  border-radius: 8rpx;
+  color: #fff;
+}
+
+.status-tag.normal {
+  background-color: #52c41a;
+}
+
+.status-tag.late {
+  background-color: #ff4d4f;
+}
+
+.status-tag.early {
+  background-color: #faad14;
+}
+
+.no-record {
+  text-align: center;
+  color: #999;
+  padding: 40rpx;
+}
+
+.close-btn {
+  margin-top: 20rpx;
+  background-color: #1890ff;
+  color: #fff;
+}

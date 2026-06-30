@@ -1,0 +1,68 @@
+<view class="container">
+  <view class="map-section">
+    <map
+      id="locationMap"
+      latitude="{{location.latitude}}"
+      longitude="{{location.longitude}}"
+      scale="17"
+      show-location="{{true}}"
+      markers="{{markers}}"
+      bindmarkertap="onMarkerTap"
+      bindtap="onMapTap"
+      style="width: 100%; height: 500rpx;">
+    </map>
+  </view>
+
+  <view class="action-buttons">
+    <button class="btn-outline" bindtap="getCurrentLocation" size="mini">
+      📍 使用我的位置
+    </button>
+    <button class="btn-outline" bindtap="onSearchLocation" size="mini">
+      🔍 搜索地点
+    </button>
+  </view>
+
+  <view class="info-card">
+    <view class="info-title">考勤位置信息</view>
+    
+    <view class="info-item">
+      <text class="label">地点名称</text>
+      <input 
+        class="input-field" 
+        value="{{location.name}}" 
+        bindinput="onNameChange"
+        placeholder="输入地点名称" 
+      />
+    </view>
+
+    <view class="info-row">
+      <view class="info-half">
+        <text class="label">经度</text>
+        <text class="value">{{location.longitude}}</text>
+      </view>
+      <view class="info-half">
+        <text class="label">纬度</text>
+        <text class="value">{{location.latitude}}</text>
+      </view>
+    </view>
+
+    <view class="info-item">
+      <text class="label">打卡范围（米）</text>
+      <view class="radius-input">
+        <input 
+          class="input-field" 
+          type="number" 
+          value="{{location.radius}}" 
+          bindinput="onRadiusChange"
+          placeholder="300" 
+        />
+        <text class="unit">米</text>
+      </view>
+    </view>
+  </view>
+
+  <view class="footer">
+    <button class="btn-primary" bindtap="saveLocation">保存位置设置</button>
+    <button class="btn-default" bindtap="cancelSetting">取消</button>
+  </view>
+</view>
