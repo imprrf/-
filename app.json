@@ -9,6 +9,7 @@
     "pages/admin/locationSet",
     "pages/admin/periodsSet"
   ],
+  "lazyCodeLoading": "requiredComponents",
   "window": {
     "navigationBarBackgroundColor": "#1890ff",
     "navigationBarTitleText": "考勤打卡",
