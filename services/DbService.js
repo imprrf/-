@@ -13,6 +13,32 @@ class DbService {
     this.prefix = 'attendance_';
   }
 
+  getCloudDatabase() {
+    try {
+      const app = getApp();
+      return app && app.getCloudDatabase ? app.getCloudDatabase() : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  normalizeQuery(query = {}) {
+    const normalized = { ...query };
+    if (normalized.openid) {
+      normalized._openid = normalized.openid;
+      delete normalized.openid;
+    }
+    return normalized;
+  }
+
+  normalizeData(data = {}) {
+    const normalized = { ...data };
+    if (normalized._openid && !normalized.openid) {
+      normalized.openid = normalized._openid;
+    }
+    return normalized;
+  }
+
   // 获取完整的存储键
   getKey(collectionName, id) {
     if (id) {
@@ -42,6 +68,14 @@ class DbService {
   // 查询单条记录
   async getOne(collectionName, query) {
     try {
+      const db = this.getCloudDatabase();
+      if (db) {
+        const result = await db.collection(collectionName)
+          .where(this.normalizeQuery(query))
+          .limit(1)
+          .get();
+        return result.data.length ? this.normalizeData(result.data[0]) : null;
+      }
       const ids = this.getCollectionIds(collectionName);
       
       for (const id of ids) {
@@ -60,6 +94,17 @@ class DbService {
   // 查询多条记录
   async getList(collectionName, query = {}, options = {}) {
     try {
+      const db = this.getCloudDatabase();
+      if (db) {
+        let request = db.collection(collectionName).where(this.normalizeQuery(query));
+        if (options.orderBy) {
+          request = request.orderBy(options.orderBy.field, options.orderBy.order);
+        }
+        if (options.skip) request = request.skip(options.skip);
+        if (options.limit) request = request.limit(options.limit);
+        const result = await request.get();
+        return result.data.map(item => this.normalizeData(item));
+      }
       const ids = this.getCollectionIds(collectionName);
       let result = [];
       
@@ -101,6 +146,19 @@ class DbService {
   // 新增记录
   async add(collectionName, data) {
     try {
+      const db = this.getCloudDatabase();
+      if (db) {
+        const cloudData = { ...data };
+        delete cloudData._id;
+        delete cloudData._openid;
+        delete cloudData.openid;
+        if (data._id) {
+          await db.collection(collectionName).doc(data._id).set({ data: cloudData });
+          return { success: true, id: data._id };
+        }
+        const result = await db.collection(collectionName).add({ data: cloudData });
+        return { success: true, id: result._id };
+      }
       const id = data._id || this.generateId();
       const newData = {
         ...data,
@@ -126,6 +184,17 @@ class DbService {
   // 更新记录
   async update(collectionName, query, data) {
     try {
+      const db = this.getCloudDatabase();
+      if (db) {
+        const cloudData = { ...data };
+        delete cloudData._id;
+        delete cloudData._openid;
+        delete cloudData.openid;
+        const result = await db.collection(collectionName)
+          .where(this.normalizeQuery(query))
+          .update({ data: cloudData });
+        return { success: true, updated: result.stats.updated };
+      }
       const ids = this.getCollectionIds(collectionName);
       let updated = 0;
       
@@ -155,6 +224,13 @@ class DbService {
   // 删除记录
   async remove(collectionName, query) {
     try {
+      const db = this.getCloudDatabase();
+      if (db) {
+        const result = await db.collection(collectionName)
+          .where(this.normalizeQuery(query))
+          .remove();
+        return { success: true, removed: result.stats.removed };
+      }
       const ids = this.getCollectionIds(collectionName);
       let removed = 0;
       const newIds = [];
@@ -181,6 +257,13 @@ class DbService {
   // 统计数量
   async count(collectionName, query = {}) {
     try {
+      const db = this.getCloudDatabase();
+      if (db) {
+        const result = await db.collection(collectionName)
+          .where(this.normalizeQuery(query))
+          .count();
+        return result.total;
+      }
       const ids = this.getCollectionIds(collectionName);
       let count = 0;
       

@@ -139,12 +139,18 @@ class CheckinService {
       });
 
       if (existRecord) {
-        await DbService.update(this.collectionName, {
+        const result = await DbService.update(this.collectionName, {
           openid: record.openid,
           date: record.date
         }, record);
+        if (!result.success || result.updated < 1) {
+          return { success: false, message: '保存失败' };
+        }
       } else {
-        await DbService.add(this.collectionName, record);
+        const result = await DbService.add(this.collectionName, record);
+        if (!result.success) {
+          return { success: false, message: '保存失败' };
+        }
       }
     } catch (e) {
       console.log('保存记录失败', e);
@@ -192,10 +198,13 @@ class CheckinService {
       record.status = 'normal';
 
       // 保存
-      await DbService.update(this.collectionName, {
+      const result = await DbService.update(this.collectionName, {
         openid,
         date
       }, record);
+      if (!result.success || result.updated < 1) {
+        return { success: false, message: '更新失败' };
+      }
 
       return { success: true, record };
     } catch (e) {

@@ -46,41 +46,27 @@ Page({
     this.setData({ loading: true });
 
     try {
-      // 优先从云数据库同步数据到本地
+      let users = [];
       const db = app.getCloudDatabase();
       if (db) {
         try {
           const cloudResult = await db.collection('users').get();
-          if (cloudResult.data && cloudResult.data.length > 0) {
-            // 将云数据库数据同步到本地
-            for (const cloudUser of cloudResult.data) {
-              const localUser = {
-                ...cloudUser,
-                // 兼容字段
-                name: cloudUser.name || cloudUser.realName || '',
-                createTime: cloudUser.createTime || cloudUser._createTime || Date.now()
-              };
-              
-              // 检查本地是否已存在该用户
-              const existingUser = await DbService.getOne('users', { openid: cloudUser.openid });
-              if (existingUser) {
-                // 更新本地用户
-                await DbService.update('users', { openid: cloudUser.openid }, localUser);
-              } else {
-                // 新增本地用户
-                await DbService.add('users', localUser);
-              }
-            }
-          }
+          users = cloudResult.data.map(cloudUser => ({
+            ...cloudUser,
+            openid: cloudUser._openid || cloudUser.openid,
+            name: cloudUser.name || cloudUser.realName || '',
+            createTime: cloudUser.createTime || cloudUser._createTime || Date.now()
+          }));
         } catch (e) {
           console.log('从云数据库同步用户失败', e);
         }
       }
 
-      // 从本地存储读取用户列表
-      const users = await DbService.getList('users', {}, {
-        orderBy: { field: 'createTime', order: 'desc' }
-      });
+      if (!users.length) {
+        users = await DbService.getList('users', {}, {
+          orderBy: { field: 'createTime', order: 'desc' }
+        });
+      }
 
       // 获取当前年月
       const now = new Date();
@@ -182,7 +168,7 @@ Page({
             if (db) {
               console.log('【调试】准备更新管理员权限到云:', user.openid, newIsAdmin);
               const queryResult = await db.collection('users')
-                .where({ openid: user.openid })
+                .where({ _openid: user.openid })
                 .get();
               
               console.log('【调试】查询结果:', queryResult);

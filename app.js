@@ -249,7 +249,7 @@ App({
         
         // 先查询是否存在该用户
         const queryResult = await db.collection('users')
-          .where({ openid: this.globalData.openid })
+          .where({ _openid: this.globalData.openid })
           .get();
         
         console.log('【调试】查询用户结果:', queryResult);
@@ -264,8 +264,6 @@ App({
             });
           console.log('【调试】云数据库更新成功');
         } else {
-          // 新增用户（需要显式添加 openid 字段
-          cloudUserInfo.openid = this.globalData.openid;
           console.log('【调试】准备新增用户:', cloudUserInfo);
           await db.collection('users').add({
             data: cloudUserInfo

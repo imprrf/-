@@ -78,14 +78,22 @@ class ConfigService {
       // 更新到数据库
       const existConfig = await DbService.getOne(this.collectionName, { _id: 'main_config' });
       
+      let result;
       if (existConfig) {
-        await DbService.update(
+        result = await DbService.update(
           this.collectionName,
           { _id: 'main_config' },
           updateData
         );
       } else {
-        await DbService.add(this.collectionName, updateData);
+        result = await DbService.add(this.collectionName, updateData);
+      }
+
+      if (!result || !result.success) {
+        return {
+          success: false,
+          message: result && result.message ? result.message : '配置保存失败'
+        };
       }
 
       // 更新本地存储
@@ -94,12 +102,7 @@ class ConfigService {
       return { success: true, config: updateData };
     } catch (e) {
       console.log('更新配置失败', e);
-      
-      // 仅更新本地存储
-      const localConfig = { ...this.defaultConfig, ...config };
-      wx.setStorageSync('attendanceConfig', localConfig);
-      
-      return { success: true, config: localConfig };
+      return { success: false, message: '配置保存失败' };
     }
   }
 

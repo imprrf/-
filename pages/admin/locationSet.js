@@ -222,7 +222,7 @@ Page({
       wx.showLoading({ title: '保存中...', mask: true });
       
       // 保存到数据库
-      await ConfigService.updateConfig({
+      const result = await ConfigService.updateConfig({
         location: {
           latitude: location.latitude,
           longitude: location.longitude,
@@ -230,6 +230,10 @@ Page({
           name: location.name
         }
       });
+
+      if (!result || !result.success) {
+        throw new Error(result && result.message ? result.message : '配置保存失败');
+      }
       
       // 更新全局配置
       const app = getApp();

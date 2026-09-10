@@ -130,6 +130,8 @@ Page({
   // ==================== 【已修复】混合格式双控状态机 ====================
   async loadTodayRecords() {
     if (!app.globalData.isLogin) return;
+    const openid = app.globalData.openid;
+    if (!openid) return;
     const db = app.getCloudDatabase();
     if (!db) {
       if (!this._isUnloaded) {
@@ -145,7 +147,7 @@ Page({
     
     try {
       const res = await db.collection('records')
-        .where({ date: dateStr })
+        .where({ _openid: openid, date: dateStr })
         .get();
 
       if (this._isUnloaded) return;
@@ -311,7 +313,7 @@ Page({
 
 // ==================== 【已修复 null 冲突】打卡决策 ====================
 async onClock() {
-  if (!this.data.canClock) {
+  if (!this.data.canClock || this._clocking) {
     wx.showToast({ title: '请稍后再试', icon: 'none' });
     return;
   }
@@ -319,6 +321,9 @@ async onClock() {
     wx.showToast({ title: '请先登录', icon: 'none' });
     return;
   }
+
+  this._clocking = true;
+  this.setData({ canClock: false });
 
   const now = new Date();
   const dateStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
@@ -339,6 +344,8 @@ async onClock() {
 
   const db = app.getCloudDatabase();
   if (!db) {
+    this._clocking = false;
+    this.setData({ canClock: true });
     wx.showToast({ title: '云服务不可用', icon: 'none' });
     return;
   }
@@ -349,6 +356,7 @@ async onClock() {
   try {
     const res = await db.collection('records')
       .where({ 
+        _openid: app.globalData.openid,
         date: dateStr,
         status: 'Incomplete'
       })
@@ -357,6 +365,8 @@ async onClock() {
       incompleteRecord = res.data[0];
     }
   } catch (e) {
+    this._clocking = false;
+    this.setData({ canClock: true });
     wx.showToast({ title: '查询数据库失败', icon: 'none' });
     return;
   }
@@ -406,12 +416,20 @@ async onClock() {
     }
 
     wx.hideLoading();
+    this._clocking = false;
+    if (!this._isUnloaded) {
+      this.setData({ canClock: true });
+    }
     if (this._isUnloaded) return;
     
     await this.loadTodayRecords();
     this.showCheckinResult('success', '✓', `${typeName}打卡成功 (${timeStr})`);
   } catch (e) {
     wx.hideLoading();
+    this._clocking = false;
+    if (!this._isUnloaded) {
+      this.setData({ canClock: true });
+    }
     if (!this._isUnloaded) {
       this.showCheckinResult('error', '✗', '打卡失败，请重试');
       console.error('【打卡异常底层日志】详细错误报告:', e); 

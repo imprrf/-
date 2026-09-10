@@ -30,6 +30,8 @@ Page({
 
   async loadRecords() {
     const { year, month } = this.data;
+    const openid = app.globalData.openid;
+    if (!openid) return;
     const db = this.db || app.getCloudDatabase();
     this.db = db;
     if (!db) {
@@ -50,6 +52,7 @@ Page({
       const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('超时')), 8000));
       const query = db.collection('records')
         .where({
+          _openid: openid,
           date: db.command.gte(startDate).and(db.command.lte(endDate))
         })
         .get();
@@ -102,6 +105,8 @@ Page({
   async onDateTap(e) {
     const date = e.currentTarget.dataset.date;
     if (!date) return;
+    const openid = app.globalData.openid;
+    if (!openid) return;
     this.setData({ selectedDate: date, showDetail: true });
 
     const db = this.db || app.getCloudDatabase();
@@ -115,7 +120,7 @@ Page({
     try {
       const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('超时')), 8000));
       const query = db.collection('records')
-        .where({ date })
+        .where({ _openid: openid, date })
         .orderBy('timestamp', 'asc')
         .get();
       const res = await Promise.race([query, timeout]);

@@ -32,7 +32,6 @@ exports.main = async (event, context) => {
       user = { ...existing.data[0], ...updateData };
     } else {
       const newUser = {
-        _openid: openid,
         avatarUrl,
         nickName,
         phone: phoneNumber || '',
