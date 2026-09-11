@@ -102,6 +102,73 @@ Page({
     this.setData({ year, month }, () => this.loadRecords());
   },
 
+  buildPairedRecords(records) {
+    const sortedRecords = [...records].sort((a, b) => {
+      const timeA = a.timestamp || a.checkInTimestamp || a.clockInTimestamp || 0;
+      const timeB = b.timestamp || b.checkInTimestamp || b.clockInTimestamp || 0;
+      return timeA - timeB;
+    });
+    const paired = [];
+    let currentIn = null;
+
+    sortedRecords.forEach(record => {
+      if (record.status === 'Incomplete') {
+        paired.push({
+          inTime: record.checkInTime || '--',
+          outTime: '进行中',
+          duration: '--',
+          status: 'normal'
+        });
+        return;
+      }
+
+      if (record.status === 'Complete') {
+        paired.push({
+          inTime: record.checkInTime || '--',
+          outTime: record.checkOutTime || '--',
+          duration: record.totalWorkTime || '--',
+          status: 'normal'
+        });
+        return;
+      }
+
+      if (record.clockIn || record.clockOut) {
+        if (record.clockIn) {
+          paired.push({
+            inTime: record.clockIn,
+            outTime: record.clockOut || '进行中',
+            duration: record.duration ? this.formatDuration(record.duration * 60000) : '--',
+            status: 'normal'
+          });
+        }
+        return;
+      }
+
+      const type = record.type || 'in';
+      if (type === 'in') {
+        currentIn = record;
+      } else if (type === 'out' && currentIn) {
+        paired.push({
+          inTime: currentIn.time || '--',
+          outTime: record.time || '--',
+          duration: this.formatDuration((record.timestamp || 0) - (currentIn.timestamp || 0)),
+          status: 'normal'
+        });
+        currentIn = null;
+      }
+    });
+
+    if (currentIn) {
+      paired.push({
+        inTime: currentIn.time || '--',
+        outTime: '进行中',
+        duration: '--',
+        status: 'normal'
+      });
+    }
+    return paired;
+  },
+
   async onDateTap(e) {
     const date = e.currentTarget.dataset.date;
     if (!date) return;
@@ -125,28 +192,7 @@ Page({
         .get();
       const res = await Promise.race([query, timeout]);
       if (this._isUnloaded) return;
-      const records = res.data;
-      let paired = [];
-      for (let i = 0; i < records.length; i++) {
-        if (records[i].type === 'in' && i+1 < records.length && records[i+1].type === 'out') {
-          const inRec = records[i];
-          const outRec = records[i+1];
-          const duration = outRec.timestamp - inRec.timestamp;
-          paired.push({
-            inTime: inRec.time,
-            outTime: outRec.time,
-            duration: this.formatDuration(duration)
-          });
-          i++;
-        } else if (records[i].type === 'in' && i === records.length - 1) {
-          paired.push({
-            inTime: records[i].time,
-            outTime: '进行中',
-            duration: '--'
-          });
-        }
-        // 单独出忽略（或可单独显示）
-      }
+      const paired = this.buildPairedRecords(res.data);
       this.setData({ selectedDateRecords: paired });
     } catch (e) {
       console.error('查询详情失败', e);

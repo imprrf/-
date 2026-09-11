@@ -7,6 +7,7 @@ Page({
     isLogin: false,
     userInfo: null,
     isAdmin: false,
+    appVersion: app.globalData.appVersion || '1.0.1',
     attendanceInfo: {
       workDays: 0, presentDays: 0, lateDays: 0, earlyDays: 0, absentDays: 0
     },
@@ -63,7 +64,7 @@ Page({
       if (Array.isArray(records)) {
         records.forEach(record => {
           if (!record) return;
-          if (record.clockIn || record.clockOut) {
+          if (record.clockIn || record.clockOut || record.checkInTime || record.checkOutTime) {
             presentDays++;
           }
         });
@@ -161,7 +162,7 @@ Page({
   onAbout() {
     wx.showModal({
       title: '考勤打卡系统',
-      content: '版本：1.0.0\n\n简洁高效的考勤打卡工具，支持定位打卡、记录统计等功能。',
+      content: `版本：${this.data.appVersion}\n\n简洁高效的考勤打卡工具，支持定位打卡、记录统计等功能。`,
       showCancel: false
     });
   },

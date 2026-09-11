@@ -47,7 +47,8 @@ Page({
       const { year, month, user } = this.data;
       
       // 加载月度记录
-      const records = await CheckinService.getMonthRecords(year, month, user.openid);
+      const records = (await CheckinService.getMonthRecords(year, month, user.openid))
+        .map(record => this.normalizeRecord(record));
       
       // 计算统计数据
       const stats = await CheckinService.getStatistics(year, month, user.openid);
@@ -90,7 +91,7 @@ Page({
       const record = recordMap[dateStr];
       let status = '';
       
-      if (record && (record.clockIn || record.clockOut)) {
+      if (record && (record.clockIn || record.clockOut || record.checkInTime || record.checkOutTime)) {
         status = 'normal';
       }
       
@@ -98,6 +99,25 @@ Page({
     }
     
     return grid;
+  },
+
+  normalizeRecord(record) {
+    const duration = record.duration || (
+      record.checkInTimestamp && record.checkOutTimestamp
+        ? Math.round((record.checkOutTimestamp - record.checkInTimestamp) / 60000)
+        : 0
+    );
+    return {
+      ...record,
+      clockIn: record.clockIn || record.checkInTime || '',
+      clockOut: record.clockOut || record.checkOutTime || '',
+      duration,
+      locationIn: record.locationIn || record.checkInLocation || null,
+      locationOut: record.locationOut || record.checkOutLocation || null,
+      status: record.status === 'Incomplete' || record.status === 'Complete'
+        ? 'normal'
+        : record.status
+    };
   },
 
   prevMonth() {

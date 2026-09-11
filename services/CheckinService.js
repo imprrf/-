@@ -264,7 +264,7 @@ class CheckinService {
 
     // 统计记录：只要有打卡就算出勤
     records.forEach(record => {
-      if (record.clockIn || record.clockOut) {
+      if (record.clockIn || record.clockOut || record.checkInTime || record.checkOutTime) {
         stats.presentDays++;
       }
     });
