@@ -5,7 +5,7 @@
 
 const DbService = require('./services/DbService');
 const ConfigService = require('./services/ConfigService');
-const APP_VERSION = '1.0.1';
+const APP_VERSION = '1.0.2';
 
 App({
   globalData: {
