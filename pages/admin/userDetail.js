@@ -10,6 +10,9 @@ Page({
     weekDays: ['日', '一', '二', '三', '四', '五', '六'],
     calendarGrid: [],
     records: [],
+    weekStats: [],
+    weekTotalMinutes: 0,
+    chartMax: 1,
     stats: {
       totalDays: 0,
       presentDays: 0,
@@ -52,6 +55,7 @@ Page({
       
       // 计算统计数据
       const stats = await CheckinService.getStatistics(year, month, user.openid);
+      const weekStats = this.buildWeekStats(records);
       
       // 生成日历
       const calendarGrid = this.generateCalendar(year, month, records);
@@ -60,6 +64,9 @@ Page({
         records: records.sort((a, b) => b.date.localeCompare(a.date)),
         stats,
         calendarGrid,
+        weekStats,
+        weekTotalMinutes: weekStats.reduce((sum, item) => sum + (item.minutes || 0), 0),
+        chartMax: Math.max(1, ...weekStats.map(item => item.count || 0)),
         loading: false
       });
     } catch (e) {
@@ -67,6 +74,44 @@ Page({
       this.setData({ loading: false });
       wx.showToast({ title: '加载失败', icon: 'none' });
     }
+  },
+
+  buildWeekStats(records) {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const recordMap = {};
+
+    records.forEach(record => {
+      if (!record.date) return;
+      recordMap[record.date] = record;
+    });
+
+    const result = [];
+    const maxDayCount = 7;
+    let chartMax = 1;
+
+    for (let i = maxDayCount - 1; i >= 0; i--) {
+      const date = new Date(today);
+      date.setDate(today.getDate() - i);
+      const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+      const record = recordMap[key] || {};
+      const count = ((record.clockIn ? 1 : 0) + (record.clockOut ? 1 : 0));
+      const minutes = Number(record.duration || 0);
+      result.push({
+        key,
+        label: `${date.getMonth() + 1}/${date.getDate()}`,
+        count,
+        minutes,
+        barHeight: 0
+      });
+      if (count > chartMax) chartMax = count;
+    }
+
+    result.forEach(item => {
+      item.barHeight = item.count === 0 ? 6 : Math.max(18, (item.count / chartMax) * 100);
+    });
+
+    return result;
   },
 
   generateCalendar(year, month, records) {
@@ -169,6 +214,16 @@ Page({
 
   formatDuration(minutes) {
     if (!minutes) return '--';
+    const hours = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+    if (hours > 0) {
+      return `${hours}小时${mins > 0 ? mins + '分钟' : ''}`;
+    }
+    return `${mins}分钟`;
+  },
+
+  formatWeekTotal(minutes) {
+    if (!minutes) return '0分钟';
     const hours = Math.floor(minutes / 60);
     const mins = minutes % 60;
     if (hours > 0) {

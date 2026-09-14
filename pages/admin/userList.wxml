@@ -32,8 +32,8 @@
           <view class="user-detail">
             <view class="name-row">
               <text class="user-name">{{item.name || '未设置姓名'}}</text>
-              <text class="tag {{item.isAdmin ? 'tag-admin' : 'tag-member'}}">
-                {{item.isAdmin ? '管理员' : '成员'}}
+              <text class="tag {{item.role === 'admin' || item.isAdmin ? 'tag-admin' : 'tag-member'}}">
+                {{item.role === 'admin' || item.isAdmin ? '管理员' : '成员'}}
               </text>
             </view>
             <text class="user-phone">{{item.phone || '未绑定手机'}}</text>
@@ -54,7 +54,7 @@
           <text>📋 查看记录</text>
         </view>
         <view class="action-btn secondary" bindtap="onToggleAdmin" data-user="{{item}}">
-          <text>{{item.isAdmin ? '⚙️ 取消管理员' : '⚙️ 设为管理员'}}</text>
+          <text>{{item.role === 'admin' || item.isAdmin ? '⚙️ 取消管理员' : '⚙️ 设为管理员'}}</text>
         </view>
       </view>
     </view>

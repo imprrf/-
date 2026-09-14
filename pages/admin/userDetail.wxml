@@ -27,6 +27,24 @@
     </view>
   </view>
 
+  <!-- 周统计视图 -->
+  <view class="card week-summary">
+    <view class="summary-header">
+      <text class="summary-title">最近7天统计</text>
+      <text class="summary-total">本周时长：{{formatWeekTotal(weekTotalMinutes)}}</text>
+    </view>
+
+    <view class="chart-wrap">
+      <view class="chart-item" wx:for="{{weekStats}}" wx:key="key">
+        <view class="chart-col">
+          <view class="chart-bar" style="height: {{item.barHeight}}%"></view>
+        </view>
+        <text class="chart-label">{{item.label}}</text>
+        <text class="chart-value">{{item.count}}次</text>
+      </view>
+    </view>
+  </view>
+
   <!-- 日历视图 -->
   <view class="calendar card">
     <view class="calendar-header">

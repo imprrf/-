@@ -30,7 +30,9 @@ Page({
 
   // 检查管理员权限
   checkAdmin() {
-    if (!app.globalData.isAdmin) {
+    const currentUser = app.globalData.userInfo || {};
+    const isAdmin = app.isUserAdmin ? app.isUserAdmin(currentUser) : !!app.globalData.isAdmin;
+    if (!isAdmin) {
       wx.showToast({
         title: '无权限访问',
         icon: 'none'
@@ -55,6 +57,8 @@ Page({
             ...cloudUser,
             openid: cloudUser._openid || cloudUser.openid,
             name: cloudUser.name || cloudUser.realName || '',
+            role: cloudUser.role || (cloudUser.isAdmin ? 'admin' : 'member'),
+            isAdmin: cloudUser.role === 'admin' || !!cloudUser.isAdmin,
             createTime: cloudUser.createTime || cloudUser._createTime || Date.now()
           }));
         } catch (e) {
@@ -146,54 +150,58 @@ Page({
   // 切换管理员权限
   async onToggleAdmin(e) {
     const user = e.currentTarget.dataset.user;
-    const action = user.isAdmin ? '取消' : '设置';
+    const currentRole = user.role || (user.isAdmin ? 'admin' : 'member');
+    const nextRole = currentRole === 'admin' ? 'member' : 'admin';
+    const action = nextRole === 'admin' ? '设置' : '取消';
     
     wx.showModal({
       title: '确认操作',
-      content: `确定要${action} ${user.name || '该成员'} 为管理员吗？`,
+      content: `确定要${action} ${user.name || '该成员'} 为${nextRole === 'admin' ? '管理员' : '普通成员'}吗？`,
       success: async (res) => {
         if (res.confirm) {
           try {
-            const newIsAdmin = !user.isAdmin;
-            
-            // 更新本地存储
+            const db = app.getCloudDatabase();
+            const currentUser = app.globalData.userInfo || {};
+            const updateData = {
+              role: nextRole,
+              isAdmin: nextRole === 'admin',
+              updatedAt: Date.now()
+            };
+
             await DbService.update('users', {
               openid: user.openid
-            }, {
-              isAdmin: newIsAdmin
-            });
-            
-            // 同步到云数据库
-            const db = app.getCloudDatabase();
+            }, updateData);
+
             if (db) {
-              console.log('【调试】准备更新管理员权限到云:', user.openid, newIsAdmin);
               const queryResult = await db.collection('users')
                 .where({ _openid: user.openid })
                 .get();
               
-              console.log('【调试】查询结果:', queryResult);
-              
               if (queryResult.data && queryResult.data.length > 0) {
-                const updateData = { isAdmin: newIsAdmin };
-                // 确保没有保留字段
-                delete updateData._openid;
-                delete updateData._id;
-                
-                console.log('【调试】准备更新云数据库:', updateData);
                 await db.collection('users')
                   .doc(queryResult.data[0]._id)
                   .update({
                     data: updateData
                   });
-                console.log('【调试】云数据库管理员权限更新成功');
               }
             }
-            
-            app.showSuccess('操作成功');
+
+            await DbService.add('roleLogs', {
+              actorOpenid: app.globalData.openid,
+              actorName: currentUser.name || '管理员',
+              targetOpenid: user.openid,
+              targetName: user.name || '成员',
+              oldRole: currentRole,
+              newRole: nextRole,
+              action: nextRole === 'admin' ? 'grant_admin' : 'revoke_admin',
+              createdAt: Date.now()
+            });
+
+            wx.showToast({ title: '操作成功', icon: 'success' });
             this.loadUsers();
           } catch (e) {
             console.log('更新失败', e);
-            app.showError('操作失败');
+            wx.showToast({ title: '操作失败', icon: 'none' });
           }
         }
       }

@@ -8,6 +8,20 @@ const ConfigService = require('./services/ConfigService');
 const APP_VERSION = '1.0.2';
 
 App({
+  normalizeUserRecord(user = {}) {
+    const normalized = { ...user };
+    const role = (normalized.role || '').toLowerCase();
+    normalized.role = role || (normalized.isAdmin ? 'admin' : 'member');
+    normalized.isAdmin = normalized.role === 'admin' || !!normalized.isAdmin;
+    return normalized;
+  },
+
+  isUserAdmin(user) {
+    if (!user) return false;
+    const role = (user.role || '').toLowerCase();
+    return role === 'admin' || !!user.isAdmin;
+  },
+
   globalData: {
     appVersion: APP_VERSION,
     openid: '',
@@ -102,13 +116,14 @@ App({
     const userInfo = wx.getStorageSync('userInfo');
 
     if (openid && userInfo) {
+      const normalizedUser = this.normalizeUserRecord(userInfo);
       this.globalData.openid = openid;
-      this.globalData.userInfo = userInfo;
+      this.globalData.userInfo = normalizedUser;
       this.globalData.isLogin = true;
-      this.globalData.isAdmin = userInfo.isAdmin || false;
+      this.globalData.isAdmin = this.isUserAdmin(normalizedUser);
 
       // 异步同步用户信息（不阻塞 onLaunch）
-      this.syncUserInfo(userInfo).catch(e => {
+      this.syncUserInfo(normalizedUser).catch(e => {
         console.log('同步用户信息失败', e);
       });
     }
@@ -158,6 +173,7 @@ App({
             name: '微信用户',
             avatar: '',
             phone: '',
+            role: 'member',
             isAdmin: false,
             createTime: Date.now()
           };
@@ -165,6 +181,7 @@ App({
           // 检查是否为第一个用户
           const countResult = await db.collection('users').count();
           if (countResult.total === 0) {
+            userInfo.role = 'admin';
             userInfo.isAdmin = true;
           }
           // 插入新记录
@@ -173,7 +190,9 @@ App({
           });
           console.log('新用户注册成功');
         }
-  
+
+        userInfo = this.normalizeUserRecord(userInfo);
+        
         // 【关键兼容】在内存中为对象补上 openid 属性，防止后续页面因读取 userInfo.openid 而崩溃
         userInfo.openid = openid;
   
@@ -184,7 +203,7 @@ App({
         this.globalData.openid = openid;
         this.globalData.userInfo = userInfo;
         this.globalData.isLogin = true;
-        this.globalData.isAdmin = userInfo.isAdmin || false;
+        this.globalData.isAdmin = this.isUserAdmin(userInfo);
   
         wx.hideLoading();
         resolve(userInfo);
@@ -201,20 +220,29 @@ App({
    */
   async syncUserInfo(userInfo) {
     try {
-      const existingUser = await DbService.getOne('users', { openid: userInfo.openid });
+      const normalizedUser = this.normalizeUserRecord(userInfo);
+      const existingUser = await DbService.getOne('users', { openid: normalizedUser.openid });
       if (!existingUser) {
-        await DbService.add('users', userInfo);
+        await DbService.add('users', normalizedUser);
       } else {
-        // 如果数据库中已经是管理员，同步到本地
-        if (existingUser.isAdmin) {
+        const normalizedExisting = this.normalizeUserRecord(existingUser);
+        const nextRole = normalizedExisting.role || normalizedUser.role || 'member';
+        const updateData = {
+          role: nextRole,
+          isAdmin: nextRole === 'admin',
+          lastLoginTime: Date.now(),
+          name: normalizedUser.name || normalizedExisting.name,
+          phone: normalizedUser.phone || normalizedExisting.phone || '',
+          avatar: normalizedUser.avatar || normalizedExisting.avatar || ''
+        };
+
+        if (nextRole === 'admin') {
           this.globalData.isAdmin = true;
-          userInfo.isAdmin = true;
-          wx.setStorageSync('userInfo', userInfo);
+          normalizedUser.isAdmin = true;
+          normalizedUser.role = 'admin';
+          wx.setStorageSync('userInfo', normalizedUser);
         }
-        // 更新最后登录时间
-        await DbService.update('users', { openid: userInfo.openid }, {
-          lastLoginTime: Date.now()
-        });
+        await DbService.update('users', { openid: normalizedUser.openid }, updateData);
       }
     } catch (e) {
       console.log('同步用户信息失败，保存本地备份', e);
@@ -278,9 +306,10 @@ App({
     } catch (e) {
       console.log('更新用户信息失败', e);
     }
-    wx.setStorageSync('userInfo', userInfo);
-    this.globalData.userInfo = userInfo;
-    this.globalData.isAdmin = userInfo.isAdmin || false;
+    const normalizedUser = this.normalizeUserRecord(userInfo);
+    wx.setStorageSync('userInfo', normalizedUser);
+    this.globalData.userInfo = normalizedUser;
+    this.globalData.isAdmin = this.isUserAdmin(normalizedUser);
   },
 
   /**
