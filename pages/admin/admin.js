@@ -15,13 +15,9 @@ Page({
    * 生命周期函数--监听页面加载
    */
   onLoad(options) {
-    const currentAdminStatus = app.globalData.isAdmin || false;
-    
-    this.setData({
-      isAdmin: currentAdminStatus
-    });
+    this.checkAdminStatus();
 
-    if (currentAdminStatus) {
+    if (this.data.isAdmin) {
       this.loadAllMembersData();
     }
   },
@@ -30,9 +26,23 @@ Page({
    * 生命周期函数--监听页面显示
    */
   onShow() {
+    // 每次显示页面时都重新检查管理员状态
+    this.checkAdminStatus();
+
     if (this.data.isAdmin) {
       this.loadAllMembersData();
     }
+  },
+
+  /**
+   * 检查管理员状态（从全局数据读取最新状态）
+   */
+  checkAdminStatus() {
+    const currentAdminStatus = app.globalData.isAdmin || false;
+
+    this.setData({
+      isAdmin: currentAdminStatus
+    });
   },
 
   tapSystemConfig() {

@@ -52,7 +52,9 @@ Page({
       const db = app.getCloudDatabase();
       if (db) {
         try {
-          const cloudResult = await db.collection('users').get();
+          const cloudResult = await db.collection('users')
+            .limit(1000)  // 设置合理的上限，避免数据过大
+            .get();
           users = cloudResult.data.map(cloudUser => ({
             ...cloudUser,
             openid: cloudUser._openid || cloudUser.openid,

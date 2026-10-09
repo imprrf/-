@@ -5,36 +5,6 @@
     <text class="page-title">系统配置</text>
   </view>
 
-  <!-- 通用设置 -->
-  <view class="card">
-    <view class="card-title">
-      <text class="title-text">通用设置</text>
-    </view>
-    <view class="setting-list">
-      <view class="setting-item">
-        <view class="setting-left">
-          <text class="setting-icon">🔔</text>
-          <text class="setting-label">消息通知提醒</text>
-        </view>
-        <switch checked disabled color="#1890ff" />
-      </view>
-      <view class="setting-item">
-        <view class="setting-left">
-          <text class="setting-icon">📍</text>
-          <text class="setting-label">打卡自动定位</text>
-        </view>
-        <switch checked disabled color="#1890ff" />
-      </view>
-      <view class="setting-item">
-        <view class="setting-left">
-          <text class="setting-icon">🗑️</text>
-          <text class="setting-label">清除本地缓存</text>
-        </view>
-        <text class="setting-arrow">›</text>
-      </view>
-    </view>
-  </view>
-
   <!-- 管理员后台 -->
   <view class="card" wx:if="{{isAdmin}}">
     <view class="card-title">

@@ -68,16 +68,18 @@ class ConfigService {
   // 更新配置
   async updateConfig(config) {
     try {
+      // 先获取当前配置，再合并新配置
+      const existConfig = await DbService.getOne(this.collectionName, { _id: 'main_config' });
+
       const updateData = {
         ...this.defaultConfig,
-        ...config,
+        ...(existConfig || {}),  // 保留现有配置
+        ...config,                // 覆盖传入的配置
         _id: 'main_config',
         updateTime: Date.now()
       };
 
       // 更新到数据库
-      const existConfig = await DbService.getOne(this.collectionName, { _id: 'main_config' });
-      
       let result;
       if (existConfig) {
         result = await DbService.update(

@@ -55,6 +55,7 @@ Page({
           _openid: openid,
           date: db.command.gte(startDate).and(db.command.lte(endDate))
         })
+        .limit(1000)  // 设置合理的上限，避免单月数据过大
         .get();
       const res = await Promise.race([query, timeout]);
       records = res.data;

@@ -350,12 +350,38 @@ async onClock() {
     return;
   }
   const _ = db.command; // 👈 核心：引入云数据库指令集
-  
-  // 查找今天有没有挂起的“未完成”打卡记录
+
+  // 👈 新增：清理历史未完成记录（昨天及更早的 Incomplete 记录）
+  try {
+    const historyRes = await db.collection('records')
+      .where({
+        _openid: app.globalData.openid,
+        date: _.lt(dateStr),  // 日期小于今天
+        status: 'Incomplete'
+      })
+      .get();
+
+    // 批量更新为”未签退”状态
+    for (const oldRecord of historyRes.data) {
+      await db.collection('records').doc(oldRecord._id).update({
+        data: {
+          checkOutTime: '未签退',
+          checkOutTimestamp: null,
+          checkOutLocation: _.set({}),
+          totalWorkTime: '--',
+          status: 'Incomplete_Expired'  // 标记为过期未完成
+        }
+      });
+    }
+  } catch (e) {
+    console.log('清理历史未完成记录失败，继续打卡', e);
+  }
+
+  // 查找今天有没有挂起的”未完成”打卡记录
   let incompleteRecord = null;
   try {
     const res = await db.collection('records')
-      .where({ 
+      .where({
         _openid: app.globalData.openid,
         date: dateStr,
         status: 'Incomplete'
@@ -382,13 +408,13 @@ async onClock() {
       const newRecord = {
         date: dateStr,
         timestamp: now.getTime(),
-        userName: uInfo.name || '微信用户', 
-        userPhone: uInfo.phone || '',       
-        
+        userName: uInfo.name || '微信用户',
+        userPhone: uInfo.phone || '',
+
         checkInTime: timeStr,
         checkInTimestamp: now.getTime(),
         checkInLocation: location,
-        
+
         checkOutTime: null,
         checkOutTimestamp: null,
         checkOutLocation: {}, // 👈 优化：初始化为空对象 {}，防止以后更新遇到 null 报错
@@ -408,7 +434,7 @@ async onClock() {
         data: {
           checkOutTime: timeStr,
           checkOutTimestamp: now.getTime(),
-          checkOutLocation: _.set(location || {}), 
+          checkOutLocation: _.set(location || {}),
           totalWorkTime: formattedDuration,
           status: 'Complete'
         }
@@ -421,7 +447,7 @@ async onClock() {
       this.setData({ canClock: true });
     }
     if (this._isUnloaded) return;
-    
+
     await this.loadTodayRecords();
     this.showCheckinResult('success', '✓', `${typeName}打卡成功 (${timeStr})`);
   } catch (e) {
@@ -432,7 +458,7 @@ async onClock() {
     }
     if (!this._isUnloaded) {
       this.showCheckinResult('error', '✗', '打卡失败，请重试');
-      console.error('【打卡异常底层日志】详细错误报告:', e); 
+      console.error('【打卡异常底层日志】详细错误报告:', e);
     }
   }
 },
