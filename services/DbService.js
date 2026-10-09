@@ -143,7 +143,7 @@ class DbService {
     }
   }
 
-  // 新增记录
+  // 新增记录（如果有 _id，改用 set 实现 upsert 效果）
   async add(collectionName, data) {
     try {
       const db = this.getCloudDatabase();
@@ -153,9 +153,11 @@ class DbService {
         delete cloudData._openid;
         delete cloudData.openid;
         if (data._id) {
+          // 对于指定 _id 的插入，用 set 做到"有则覆盖、无则创建"
           await db.collection(collectionName).doc(data._id).set({ data: cloudData });
           return { success: true, id: data._id };
         }
+        // 无 _id 时才用 add（自动生成 _id）
         const result = await db.collection(collectionName).add({ data: cloudData });
         return { success: true, id: result._id };
       }
@@ -190,6 +192,15 @@ class DbService {
         delete cloudData._id;
         delete cloudData._openid;
         delete cloudData.openid;
+
+        // 对于有 _id 的精确查询，使用 doc().update 确保原子性
+        if (query._id) {
+          const result = await db.collection(collectionName)
+            .doc(query._id)
+            .update({ data: cloudData });
+          return { success: true, updated: 1 };
+        }
+
         const result = await db.collection(collectionName)
           .where(this.normalizeQuery(query))
           .update({ data: cloudData });

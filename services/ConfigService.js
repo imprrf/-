@@ -7,7 +7,7 @@ const DbService = require('./DbService');
 
 class ConfigService {
   constructor() {
-    this.collectionName = 'config';
+    this.collectionName = 'configs';
     this.defaultConfig = {
       _id: 'main_config',
       // 考勤时间配置
@@ -68,8 +68,11 @@ class ConfigService {
   // 更新配置
   async updateConfig(config) {
     try {
+      console.log('[ConfigService] 开始更新配置，传入参数:', config);
+
       // 先获取当前配置，再合并新配置
       const existConfig = await DbService.getOne(this.collectionName, { _id: 'main_config' });
+      console.log('[ConfigService] 当前配置:', existConfig);
 
       const updateData = {
         ...this.defaultConfig,
@@ -78,20 +81,26 @@ class ConfigService {
         _id: 'main_config',
         updateTime: Date.now()
       };
+      console.log('[ConfigService] 合并后的配置:', updateData);
 
       // 更新到数据库
       let result;
       if (existConfig) {
+        console.log('[ConfigService] 执行更新操作');
         result = await DbService.update(
           this.collectionName,
           { _id: 'main_config' },
           updateData
         );
       } else {
+        console.log('[ConfigService] 执行新增操作');
         result = await DbService.add(this.collectionName, updateData);
       }
 
+      console.log('[ConfigService] 数据库操作结果:', result);
+
       if (!result || !result.success) {
+        console.error('[ConfigService] 保存失败:', result);
         return {
           success: false,
           message: result && result.message ? result.message : '配置保存失败'
@@ -100,11 +109,12 @@ class ConfigService {
 
       // 更新本地存储
       wx.setStorageSync('attendanceConfig', updateData);
+      console.log('[ConfigService] 配置保存成功');
 
       return { success: true, config: updateData };
     } catch (e) {
-      console.log('更新配置失败', e);
-      return { success: false, message: '配置保存失败' };
+      console.error('[ConfigService] 更新配置异常:', e);
+      return { success: false, message: '配置保存失败: ' + (e.message || e) };
     }
   }
 
