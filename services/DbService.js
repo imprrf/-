@@ -68,16 +68,28 @@ class DbService {
   // 查询单条记录
   async getOne(collectionName, query) {
     try {
+      console.log(`[DbService.getOne] 查询: ${collectionName}`, query);
       const db = this.getCloudDatabase();
       if (db) {
+        // 如果查询条件只有 _id，直接用 doc() 查询（避免自动添加 _openid 限制）
+        if (query._id && Object.keys(query).length === 1) {
+          const result = await db.collection(collectionName).doc(query._id).get();
+          const data = result.data ? this.normalizeData(result.data) : null;
+          console.log(`[DbService.getOne] 查询结果:`, data ? '找到' : '未找到');
+          return data;
+        }
+
+        // 其他情况用 where() 查询
         const result = await db.collection(collectionName)
           .where(this.normalizeQuery(query))
           .limit(1)
           .get();
-        return result.data.length ? this.normalizeData(result.data[0]) : null;
+        const data = result.data.length ? this.normalizeData(result.data[0]) : null;
+        console.log(`[DbService.getOne] 查询结果:`, data ? '找到' : '未找到');
+        return data;
       }
       const ids = this.getCollectionIds(collectionName);
-      
+
       for (const id of ids) {
         const item = wx.getStorageSync(this.getKey(collectionName, id));
         if (item && this.matchQuery(item, query)) {
@@ -101,7 +113,9 @@ class DbService {
           request = request.orderBy(options.orderBy.field, options.orderBy.order);
         }
         if (options.skip) request = request.skip(options.skip);
-        if (options.limit) request = request.limit(options.limit);
+        // 默认 limit 1000，避免云 SDK 默认 20 条导致数据截断
+        const limit = options.limit !== undefined ? options.limit : 1000;
+        request = request.limit(limit);
         const result = await request.get();
         return result.data.map(item => this.normalizeData(item));
       }
@@ -154,10 +168,12 @@ class DbService {
         delete cloudData.openid;
         if (data._id) {
           // 对于指定 _id 的插入，用 set 做到"有则覆盖、无则创建"
+          console.log(`[DbService.add] 使用 set 模式，collection: ${collectionName}, _id: ${data._id}`);
           await db.collection(collectionName).doc(data._id).set({ data: cloudData });
           return { success: true, id: data._id };
         }
         // 无 _id 时才用 add（自动生成 _id）
+        console.log(`[DbService.add] 使用 add 模式，collection: ${collectionName}`);
         const result = await db.collection(collectionName).add({ data: cloudData });
         return { success: true, id: result._id };
       }
@@ -198,13 +214,16 @@ class DbService {
           const result = await db.collection(collectionName)
             .doc(query._id)
             .update({ data: cloudData });
-          return { success: true, updated: 1 };
+          // 读取真实的更新数量，而不是硬编码 1
+          const updated = result.stats ? result.stats.updated : 0;
+          return { success: updated > 0, updated };
         }
 
         const result = await db.collection(collectionName)
           .where(this.normalizeQuery(query))
           .update({ data: cloudData });
-        return { success: true, updated: result.stats.updated };
+        const updated = result.stats ? result.stats.updated : 0;
+        return { success: updated > 0, updated };
       }
       const ids = this.getCollectionIds(collectionName);
       let updated = 0;

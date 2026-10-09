@@ -7,7 +7,7 @@ const DbService = require('./DbService');
 
 class ConfigService {
   constructor() {
-    this.collectionName = 'configs';
+    this.collectionName = 'config';
     this.defaultConfig = {
       _id: 'main_config',
       // 考勤时间配置
@@ -58,10 +58,25 @@ class ConfigService {
   // 初始化配置
   async initConfig() {
     try {
+      console.log('[ConfigService.initConfig] 开始初始化配置');
+      // 先检查配置是否已存在
+      const existConfig = await DbService.getOne(this.collectionName, { _id: 'main_config' });
+      console.log('[ConfigService.initConfig] 检查结果:', existConfig ? '已存在' : '不存在');
+
+      if (existConfig) {
+        // 已存在，不需要初始化
+        console.log('[ConfigService.initConfig] 配置已存在，跳过初始化');
+        wx.setStorageSync('attendanceConfig', existConfig);
+        return;
+      }
+
+      // 不存在才新增
+      console.log('[ConfigService.initConfig] 配置不存在，开始新增');
       await DbService.add(this.collectionName, this.defaultConfig);
       wx.setStorageSync('attendanceConfig', this.defaultConfig);
+      console.log('[ConfigService.initConfig] 初始化完成');
     } catch (e) {
-      console.log('初始化配置失败', e);
+      console.log('[ConfigService.initConfig] 初始化配置失败', e);
     }
   }
 
