@@ -253,15 +253,18 @@
 
 ## T6：代码卫生与清理（完全独立，随时可做，适合穿插）
 
-### T6.1 删除废弃嵌套目录（AUDIT 问题 8）
+### ✅ T6.1 删除废弃嵌套目录（AUDIT 问题 8）【已完成 2026-10-12】
 
 确认无引用后删除：
 - `pages/admin/pages/admin/periodsSet.js`（有实体内容，疑似重复副本）
 - `pages/admin/pages/pages/admin/periodsSet.wxml`（**0 字节空文件**）
 - `services/services/LocationService.js`（10KB，全项目无任何 `require`）
 
-**动作**：先 `grep -rn "LocationService"` 确认（已做，仅自身文件内出现）→ 删除 → 跑一遍页面确认无报错。
-另：`pages/admin/pages/` 这个中间目录删空后一并移除。
+**完成情况**：
+- `periodsSet` 相关嵌套文件此前已由 `HEAD` 删除。
+- 扫描全项目确认 `LocationService` 无外部引用后，删除 `services/services/LocationService.js`。
+- 全项目 JavaScript 语法检查通过，`git diff --check` 通过。
+- `pages/admin/pages/` 与 `services/services/` 空目录已清理。
 
 ### T6.2 删除 `periodsSet` 空壳页【已决策：删除】
 
