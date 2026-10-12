@@ -21,7 +21,7 @@ miniprogram/
 │   ├── index/               # 打卡主页
 │   ├── records/              # 打卡记录查询
 │   ├── mine/                 # 个人中心
-│   └── admin/                 # 管理员后台（配置、成员管理、位置设置、班次设置）
+│   └── admin/                 # 管理员后台（配置、成员管理、位置设置）
 └── services/
     ├── DbService.js         # 数据访问层（云数据库 / 本地存储双模式）
     ├── CheckinService.js    # 打卡业务逻辑
