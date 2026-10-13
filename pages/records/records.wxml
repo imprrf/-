@@ -32,7 +32,7 @@
           {{item.inTime}} 进 → {{item.outTime}} 出
         </text>
         <text class="duration">{{item.duration}}</text>
-        <text class="status-tag {{item.status}}">{{item.statusText}}</text>
+        <text class="status-tag normal">{{item.statusText}}</text>
       </view>
     </block>
     <block wx:else>

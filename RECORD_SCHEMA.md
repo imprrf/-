@@ -14,8 +14,7 @@
 | `durationMinutes` | number | 完成时长的整分钟数，向下取整；未完成为 0 |
 | `totalWorkTime` | string | 签退后写入的显示兼容字段，例如 `8h30m`；统计使用数值字段 |
 | `status` | string | `Incomplete` / `Complete`；历史 `Incomplete_Expired` 可读取 |
-| `attendanceStatus` | string | `normal` / `late` / `early` / `late_early`，与完成状态分开 |
-| `lateMinutes` / `earlyMinutes` | number | 扣除对应宽限后的迟到、早退分钟数，最小为 0 |
+| `attendanceStatus` / `lateMinutes` / `earlyMinutes` | 历史字段 | 自由到访模式停止写入、计算和展示；旧数据保留 |
 | `distance` / `checkInDistance` | number 或 null | 签到到考勤点的距离（米）；缺失定位为 null |
 | `checkOutDistance` | number 或 null | 签退时写入 |
 | `checkInOutOfRange` / `checkOutOutOfRange` | boolean | 对应打卡距离超过配置半径；签退字段完成时写入 |
@@ -28,4 +27,4 @@
 
 历史未签退记录在统一读取层按日期判断为“未签退”，不批量改写原始历史记录。旧格式甲和 type=in/out 事件由 `RecordModel` 集中做只读适配；按用户和日期配对，避免混入其他成员的记录。部署后先执行管理员 `auditRecordSchemas` 盘点，迁移方案须依据实际数量决定。
 
-统计按北京时间截至今天的日期计算。出勤、迟到、早退、超范围按日期去重；缺卡为已到达的工作日中没有记录的日期数，周末出勤不抵扣工作日缺卡。当前工作日仅周一到周五，不含法定节假日或调休规则，不支持跨夜班次。当天未结束仍计入工作日，尚未打卡显示缺卡；未来日期不计入。
+统计按北京时间截至今天的实际记录计算。到访天数、超范围天数按日期去重，到访次数按记录组计数，停留分钟仅累计已完成记录。周末和工作日同样处理，不统计应到、迟到、早退或缺勤。历史排班时间即使缺失、格式无效或结束早于开始，也不能阻止打卡。没有记录的日期不标红；未来日期不计入。当前签到签退配对仍以当天为单位，跨日未完成记录显示“未记录离开”。

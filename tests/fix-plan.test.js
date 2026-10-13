@@ -133,23 +133,36 @@ test('并发互相撤销权限后至少保留一个管理员', async () => {
   assert.equal(results.filter((r) => r.status === 'fulfilled').length, 1);
   assert.equal([...db.table('users').values()].filter((u) => u.role === 'admin').length, 1);
 });
-test('配置保存白名单、跨夜时段拒绝；事务失败不改变配置', async () => {
+test('配置保存仅接受地点字段，忽略旧排班参数，失败时不改变地点', async () => {
   const db = await fixture();
+  const location = { latitude: 29.5, longitude: 106.2, radius: 500, name: '工作室' };
   await core.adminOps(
     db,
     'alice',
-    { action: 'updateConfig', config: { lateMinutes: 10, _openid: 'bob', initialized: true } },
+    {
+      action: 'updateConfig',
+      config: { location, lateMinutes: 10, workEndTime: '08:00', _openid: 'bob' }
+    },
     now
   );
-  assert.equal(db.table('config').get('main_config').lateMinutes, 10);
+  assert.equal(db.table('config').get('main_config').location.radius, 500);
+  assert.equal(db.table('config').get('main_config').lateMinutes, 5);
   assert.equal(db.table('config').get('main_config')._openid, undefined);
   await assert.rejects(
-    core.adminOps(db, 'alice', { action: 'updateConfig', config: { workEndTime: '08:00' } }, now),
-    /跨夜/
+    core.adminOps(
+      db,
+      'alice',
+      {
+        action: 'updateConfig',
+        config: { location: { ...location, radius: -1 } }
+      },
+      now
+    ),
+    /考勤地点配置无效/
   );
-  assert.equal(db.table('config').get('main_config').workEndTime, '18:00');
+  assert.equal(db.table('config').get('main_config').location.radius, 500);
 });
-test('软距离校验不拒绝超范围，迟到与服务端时间写入', async () => {
+test('软距离校验不拒绝超范围，服务端时间写入且不判定迟到', async () => {
   const db = await fixture();
   const result = await core.checkin(
     db,
@@ -165,7 +178,9 @@ test('软距离校验不拒绝超范围，迟到与服务端时间写入', async
   assert.equal(result.record._openid, 'bob');
   assert.equal(result.record.date, '2026-10-12');
   assert.equal(result.record.checkInTime, '10:00');
-  assert.equal(result.record.lateMinutes, 55);
+  assert.equal(result.record.lateMinutes, undefined);
+  assert.equal(result.record.earlyMinutes, undefined);
+  assert.equal(result.message, '进入打卡成功 (10:00)');
   assert.equal(result.record.outOfRange, true);
   assert.equal(result.record.status, 'Incomplete');
 });
@@ -182,14 +197,15 @@ test('同请求与不同请求并发只签到一次，超时重试不误签退',
   assert.equal(retry.type, 'in');
   assert.equal(db.table('records').size, 1);
 });
-test('签退更新同一记录，数值时长/早退准确，多次进出保留', async () => {
+test('签退更新同一记录，停留时长准确，多次进出保留', async () => {
   const db = await fixture();
   await core.checkin(db, 'bob', { requestId: 'request_0001' }, now);
   const out = await core.checkin(db, 'bob', { requestId: 'request_0002' }, now + 7 * 3600000);
   assert.equal(out.type, 'out');
   assert.equal(out.record.durationMinutes, 420);
-  assert.equal(out.record.earlyMinutes, 55);
-  assert.equal(out.record.attendanceStatus, 'late_early');
+  assert.equal(out.record.earlyMinutes, undefined);
+  assert.equal(out.record.attendanceStatus, undefined);
+  assert.equal(out.message, '离开打卡成功 (17:00)');
   assert.equal(db.table('records').size, 1);
   await core.checkin(db, 'bob', { requestId: 'request_0003' }, now + 7 * 3600000 + 60000);
   assert.equal(db.table('records').size, 2);
@@ -215,7 +231,7 @@ test('北京时间日期边界与已过未签退展示一致', () => {
   assert.equal(model.dateStr(new Date('2026-10-12T16:00:00Z')), '2026-10-13');
   assert.equal(
     model.pairs([{ date: '2020-01-01', status: 'Incomplete', checkInTime: '09:00' }])[0].outTime,
-    '未签退'
+    '未记录离开'
   );
   const paired = model.pairs([
     { date: '2020-01-01', type: 'in', time: '09:00', timestamp: 1000 },
@@ -224,7 +240,7 @@ test('北京时间日期边界与已过未签退展示一致', () => {
   assert.equal(paired.length, 1);
   assert.equal(paired[0].durationMinutes, 60);
 });
-test('统计按日期去重，周末出勤不能抵扣工作日缺勤，未来记录忽略', async () => {
+test('到访按日期去重，周末同样计入，未来记录忽略，不统计缺勤或迟到早退', async () => {
   const records = model.normalizeList([
     { date: '2020-01-06', checkInTime: '09:00', lateMinutes: 5, outOfRange: true },
     { date: '2020-01-06', checkInTime: '10:00', earlyMinutes: 10 },
@@ -233,11 +249,49 @@ test('统计按日期去重，周末出勤不能抵扣工作日缺勤，未来�
   ]);
   const stats = await checkinService.getStatistics(2020, 1, undefined, records);
   assert.equal(stats.presentDays, 2);
-  assert.equal(stats.absentDays, stats.workDays - 1);
-  assert.equal(stats.lateDays, 1);
-  assert.equal(stats.earlyDays, 1);
+  assert.equal(stats.visitCount, 3);
+  for (const key of ['absentDays', 'workDays', 'lateDays', 'earlyDays'])
+    assert.equal(key in stats, false);
   assert.equal(stats.outOfRangeDays, 1);
+  assert.equal(model.calendarStatus(records, '2020-01-06'), 'normal');
+  assert.equal(model.calendarStatus(records, '2020-01-07'), '');
 });
+test('任意时间可进入与离开，旧排班字段缺失或无效也不阻止打卡', async () => {
+  for (const time of ['00:01', '08:59', '09:00', '18:00', '23:59']) {
+    const db = await fixture();
+    const timestamp = Date.parse(`2026-10-12T${time}:00+08:00`);
+    const entry = await core.checkin(db, 'bob', { requestId: 'request_entry' }, timestamp);
+    const exit = await core.checkin(db, 'bob', { requestId: 'request_exit' }, timestamp + 6000);
+    assert.equal(entry.type, 'in');
+    assert.equal(exit.type, 'out');
+    assert.equal(entry.time, time);
+    assert.equal(/迟到|早退/.test(entry.message + exit.message), false);
+  }
+  for (const schedule of [
+    { workStartTime: 'bad', workEndTime: null },
+    { workStartTime: '22:00', workEndTime: '06:00' },
+    { workStartTime: undefined, workEndTime: undefined }
+  ]) {
+    const db = await fixture();
+    Object.assign(db.table('config').get('main_config'), schedule);
+    assert.equal(
+      (await core.checkin(db, 'bob', { requestId: 'request_entry' }, now)).success,
+      true
+    );
+  }
+});
+
+test('重试历史收据不再展示旧迟到提示', async () => {
+  const db = await fixture();
+  await core.checkin(db, 'bob', { requestId: 'request_0001' }, now);
+  const receipt = [...db.table('checkin_requests').values()][0];
+  receipt.result.message += ' · 迟到';
+  assert.equal(
+    (await core.checkin(db, 'bob', { requestId: 'request_0001' }, now)).message,
+    '进入打卡成功 (10:00)'
+  );
+});
+
 test('已成功的打卡重试不受后续配置变化影响', async () => {
   const db = await fixture();
   const original = await core.checkin(db, 'bob', { requestId: 'request_0001' }, now);

@@ -8,16 +8,8 @@ Page({
     userInfo: null,
     isAdmin: false,
     appVersion: app.globalData.appVersion,
-    attendanceInfo: {
-      workDays: 0,
-      presentDays: 0,
-      lateDays: 0,
-      earlyDays: 0,
-      absentDays: 0
-    },
+    attendanceInfo: { presentDays: 0, visitCount: 0, totalMinutes: 0, outOfRangeDays: 0 },
     config: {
-      workStartTime: '09:00',
-      workEndTime: '18:00',
       location: { name: '重庆西永考勤点', radius: 300 }
     },
     showEditModal: false,
@@ -35,10 +27,19 @@ Page({
   onShow() {
     this._isUnloaded = false;
     this.checkLoginStatus();
+    // 冷启动同步未完成或角色被改动时，等身份刷新后再更新管理员入口。
+    Promise.resolve(app.syncPromise)
+      .then(() => app.refreshIdentity())
+      .then(() => this.checkLoginStatus());
     if (app.globalData.isLogin) {
       this.loadAttendanceInfo();
     }
     this.loadConfig();
+    // 从打卡页登录后跳转而来，自动弹出一次资料编辑窗口。
+    if (app.globalData.promptProfile) {
+      app.globalData.promptProfile = false;
+      if (app.globalData.isLogin) this.onEditProfile();
+    }
   },
 
   onHide() {
@@ -85,11 +86,12 @@ Page({
 
   async onLogin() {
     try {
-      await app.login();
+      const user = await app.login();
       if (this._isUnloaded) return;
       this.checkLoginStatus();
       this.loadAttendanceInfo();
       app.showSuccess('登录成功');
+      if (app.needsProfile(user)) this.onEditProfile();
     } catch (e) {
       if (!this._isUnloaded) console.error('登录失败');
     }
@@ -104,7 +106,7 @@ Page({
     this.setData({
       showEditModal: true,
       editForm: {
-        name: userInfo ? userInfo.name || '' : '',
+        name: userInfo && userInfo.name !== '微信用户' ? userInfo.name || '' : '',
         phone: userInfo ? userInfo.phone || '' : ''
       }
     });
@@ -165,8 +167,8 @@ Page({
 
   onAbout() {
     wx.showModal({
-      title: '考勤打卡系统',
-      content: `版本：${this.data.appVersion}\n\n简洁高效的考勤打卡工具，支持定位打卡、记录统计等功能。`,
+      title: '工作室打卡',
+      content: `版本：${this.data.appVersion}\n\n记录工作室到访、离开和停留时长，可在任意时间打卡。`,
       showCancel: false
     });
   },
@@ -198,13 +200,7 @@ Page({
             isLogin: false,
             userInfo: null,
             isAdmin: false,
-            attendanceInfo: {
-              workDays: 0,
-              presentDays: 0,
-              lateDays: 0,
-              earlyDays: 0,
-              absentDays: 0
-            }
+            attendanceInfo: { presentDays: 0, visitCount: 0, totalMinutes: 0, outOfRangeDays: 0 }
           });
           app.showSuccess('已退出登录');
         }

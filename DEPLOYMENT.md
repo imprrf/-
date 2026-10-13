@@ -1,6 +1,6 @@
 # 修复版本部署与回归
 
-本地实现和本地测试不等于云端上线。本轮未连接云开发控制台，未修改线上权限、集合数据或部署云函数。新前端要求配套的新云函数；不能只上传前端。没有可用云服务时，资料、角色、配置和打卡操作会失败，不会落成本地“成功”。
+AI 未直接操作云端；用户已开始部署，并确认 updateUserInfo 更新成功、五个云函数存在及 login 业务成功。当前第 5 步打卡验收因 _id 写回错误暂停，本地已修复，待用户重新部署 checkin 后验证。最新事实及与对话一致的第 5～8 步见 [SESSION_PROGRESS.md](./SESSION_PROGRESS.md)。新前端要求配套的新云函数；不能只上传前端。没有可用云服务时，资料、角色、配置和打卡操作会失败，不会落成本地“成功”。
 
 ## 恢复基线
 
@@ -14,7 +14,7 @@
 ## 部署顺序
 
 1. 在云控制台导出 users、records、config 数据，截图保存权限设置。备份当前线上云函数及前端版本。准备首管理员、第二管理员、普通成员三个账号。
-2. 检查 users 中重复 `_openid`、管理员角色和已有 `config/main_config`。重复身份会被新接口拒绝，应先人工核对；不要盲目删除历史用户。检查是否存在 `admins` 集合；新逻辑已不再使用它。
+2. 检查 users 中重复 `_openid`、管理员角色和已有 `config/main_config`。配置只需有效地点，历史上下班时间不参与打卡。重复身份会被新接口拒绝，应先人工核对；不要盲目删除历史用户。检查是否存在 `admins` 集合；新逻辑已不再使用它。
 3. 创建集合 `roleLogs`、`security_state`、`checkin_state`、`checkin_requests`。新增集合的客户端权限设为 read=false / write=false。已有 users、records、config 权限此时先保存原值，不提前切换。
 4. 执行 `node scripts/sync-cloud.js`、`npm run check`、`npm test`。`_shared` 是源码，四个函数目录内的同名文件是生成副本；共享源码修改后必须重新同步。SDK 统一为 `~3.0.4`。
 5. 上传并部署 `login`、`checkin`、`adminOps`、`updateUserInfo`，选择“云端安装依赖”。它们均使用 `DYNAMIC_CURRENT_ENV`；前端 env 在 app.js。`getOpenid` 保留兼容，不再参与注册授权。
@@ -37,12 +37,24 @@
 | 同日正常签退，再次签到 | 更新原记录后仍支持下一组进出 |
 | 客户端伪造时间和身份 | 服务端按调用上下文与北京时间计算 |
 | 超半径、定位失败、非法经纬度 | 超范围仍允许并标记；缺定位允许并标记；非法坐标拒绝 |
-| 宽限边界、迟到和早退 | 分钟数、提示、列表与日历一致 |
+| 凌晨、9点前、18点后、深夜与无效旧排班时间 | 都可以进入与离开；没有迟到早退提示 |
 | 历史未完成、格式甲/乙、旧进出事件 | 各页使用同一适配；旧事件不能跨用户配对 |
 | 权限收紧后直接 SDK 修改自身 role/records/config | 全部拒绝；只能读本人的 users、records |
 | 云服务调用失败或拒绝保存 | UI 显示失败，不显示假成功 |
 
 需要保留组合索引 `_openid + date`，并根据控制台提示补齐查询排序索引（服务端按 `_id` 稳定分页，客户端 date + _id 排序）。海量历史统计的只读盘点可能达到云函数超时，需要在实际数据量明确后改为分段盘点。
+
+## 同名云函数上传错误
+
+`ResourceInUse.FunctionName` 表示上传流程试图创建已经存在的函数。确认环境后，在开发者工具刷新云函数列表/环境关联，再单独上传对应文件夹；不要删除已有函数来规避错误。
+
+本机 CLI 支持 `inc-deploy`，用于更新已有函数，可以在 PowerShell 执行：
+
+```powershell
+& "D:\usually\微信web开发者工具\cli.bat" cloud functions inc-deploy --env "cloud1-d4g22few1dfa58dd6" --name updateUserInfo --file . --project "C:\Users\星耀14\Documents\wx_program\miniprogram"
+```
+
+此命令更新既有 updateUserInfo 的整个代码目录，不新建同名函数；其 wx-server-sdk 依赖版本未变。用户已开启服务端口并成功执行增量更新。长命令可改为短变量，但必须显式传 --project：仅切换当前目录不够，完整短命令见 SESSION_PROGRESS.md。若后续失败，先核对错误和函数状态，不删除现有函数。
 
 ## 回滚
 

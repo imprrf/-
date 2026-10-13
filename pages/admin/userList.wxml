@@ -45,10 +45,8 @@
       <view class="user-stats">
         <view class="stat-box">
           <text class="stat-num text-success">{{item.stats.presentDays || 0}}</text>
-          <text class="stat-text">出勤</text>
+          <text class="stat-text">到访天数</text>
         </view>
-        <view class="stat-box"><text class="stat-num">{{item.stats.lateDays}}</text><text class="stat-text">迟到</text></view>
-        <view class="stat-box"><text class="stat-num">{{item.stats.earlyDays}}</text><text class="stat-text">早退</text></view>
         <view class="stat-box"><text class="stat-num text-error">{{item.stats.outOfRangeDays}}</text><text class="stat-text">超出范围</text></view>
       </view>
       

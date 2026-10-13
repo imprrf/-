@@ -3,7 +3,11 @@
   <!-- 用户信息卡片 -->
   <view class="user-card card">
     <view class="user-info" wx:if="{{isLogin}}">
-      <image class="avatar" src="{{userInfo.avatar || '/assets/icons/default_avatar.png'}}" mode="aspectFill"></image>
+      <image
+        class="avatar"
+        src="{{userInfo.avatar || '/assets/icons/default_avatar.png'}}"
+        mode="aspectFill"
+      ></image>
       <view class="info-content">
         <text class="user-name">{{userInfo.name || '未设置姓名'}}</text>
         <text class="user-phone">{{userInfo.phone || '未绑定手机'}}</text>
@@ -12,7 +16,7 @@
         <text>编辑</text>
       </view>
     </view>
-    
+
     <!-- 未登录状态 -->
     <view class="user-info not-login" wx:if="{{!isLogin}}">
       <image class="avatar" src="/assets/icons/default_avatar.png" mode="aspectFill"></image>
@@ -27,20 +31,20 @@
   <!-- 考勤信息 -->
   <view class="attendance-info card">
     <view class="info-header">
-      <text class="title">考勤信息</text>
+      <text class="title">本月到访</text>
     </view>
     <view class="info-grid">
       <view class="info-item">
-        <text class="info-value">{{attendanceInfo.workDays}}</text>
-        <text class="info-label">应到天数</text>
+        <text class="info-value">{{attendanceInfo.visitCount}}</text>
+        <text class="info-label">到访次数</text>
       </view>
       <view class="info-item">
         <text class="info-value text-success">{{attendanceInfo.presentDays}}</text>
-        <text class="info-label">实际出勤</text>
+        <text class="info-label">到访天数</text>
       </view>
       <view class="info-item">
-        <text class="info-value text-secondary">{{attendanceInfo.absentDays}}</text>
-        <text class="info-label">缺卡天数</text>
+        <text class="info-value text-secondary">{{attendanceInfo.totalMinutes}}</text>
+        <text class="info-label">停留分钟</text>
       </view>
     </view>
   </view>
@@ -54,7 +58,7 @@
     </view>
     <view class="menu-item" bindtap="onCheckInRule">
       <text class="menu-icon">⏰</text>
-      <text class="menu-text">考勤规则</text>
+      <text class="menu-text">打卡说明</text>
       <text class="menu-arrow">›</text>
     </view>
     <view class="menu-item" bindtap="onLocationSet">
@@ -102,21 +106,22 @@
       <view class="modal-header">
         <text class="modal-title">编辑个人信息</text>
       </view>
-      
+
       <view class="modal-body">
         <view class="edit-row">
           <text class="edit-label">姓名</text>
-          <input 
+          <input
             class="edit-input"
-            placeholder="请输入姓名"
+            type="nickname"
+            placeholder="请输入姓名，可点键盘上的微信昵称"
             value="{{editForm.name}}"
             bindinput="onNameInput"
           />
         </view>
-        
+
         <view class="edit-row">
           <text class="edit-label">手机号</text>
-          <input 
+          <input
             class="edit-input"
             type="number"
             maxlength="11"
@@ -139,17 +144,13 @@
     <view class="modal-mask" bindtap="onCloseRuleModal"></view>
     <view class="modal-content">
       <view class="modal-header">
-        <text class="modal-title">考勤规则</text>
+        <text class="modal-title">打卡说明</text>
       </view>
-      
+
       <view class="modal-body">
         <view class="rule-item">
-          <text class="rule-label">上班时间</text>
-          <text class="rule-value">{{config.workStartTime}}</text>
-        </view>
-        <view class="rule-item">
-          <text class="rule-label">下班时间</text>
-          <text class="rule-value">{{config.workEndTime}}</text>
+          <text class="rule-label">到访时间</text>
+          <text class="rule-value">任意时间均可打卡</text>
         </view>
         <view class="rule-item">
           <text class="rule-label">考勤半径</text>

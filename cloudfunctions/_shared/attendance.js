@@ -46,7 +46,10 @@ function locationAudit(location, config) {
   };
 }
 function visitResult(result) {
-  return { ...result, message: `${result.type === 'in' ? '进入' : '离开'}打卡成功 (${result.time})` };
+  return {
+    ...result,
+    message: `${result.type === 'in' ? '进入' : '离开'}打卡成功 (${result.time})`
+  };
 }
 async function checkin(db, openid, event, now) {
   if (typeof event.requestId !== 'string' || !/^[a-zA-Z0-9_-]{8,100}$/.test(event.requestId))
@@ -108,8 +111,9 @@ async function checkin(db, openid, event, now) {
       };
       if (audit.location) record.checkOutLocation = audit.location;
       // set 整份文档：旧的 null 位置字段也能替换，不使用嵌套字段魔法。
-      delete record._id;
-      await activeRef.set({ data: record });
+      const nextRecord = { ...record };
+      delete nextRecord._id;
+      await activeRef.set({ data: nextRecord });
       state.activeId = '';
     } else {
       type = 'in';
@@ -145,10 +149,12 @@ async function checkin(db, openid, event, now) {
       record: { ...record, _id: recordId },
       message: `${type === 'in' ? '进入' : '离开'}打卡成功 (${time})`
     };
-    await stateRef.set({
-      data: { ...state, _openid: openid, date, lastAt: now, lastResult: result }
-    });
-    await receiptRef.set({ data: { _openid: openid, createdAt: now, result } });
+    const nextState = { ...state, _openid: openid, date, lastAt: now, lastResult: result };
+    delete nextState._id;
+    await stateRef.set({ data: nextState });
+    const receiptData = { _openid: openid, createdAt: now, result };
+    delete receiptData._id;
+    await receiptRef.set({ data: receiptData });
     return result;
   });
 }

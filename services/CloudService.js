@@ -1,5 +1,5 @@
-async function call(name, data = {}) {
-  const app = getApp();
+// onLaunch 期间 getApp() 尚不可用，App 自身调用时需显式传入 app。
+async function call(name, data = {}, app = getApp()) {
   if (!app.ensureCloudReady()) throw new Error('云服务不可用');
   let response;
   try {

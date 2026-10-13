@@ -104,12 +104,17 @@ Page({
   },
   async onLogin() {
     try {
-      await app.login();
+      const user = await app.login();
       if (this._isUnloaded) return;
       this.checkLoginStatus();
       this.loadTodayRecords();
       this.getLocation();
       app.showSuccess('登录成功');
+      // 资料未补全时，转到“我的”页自动弹出编辑窗口。
+      if (app.needsProfile(user)) {
+        app.globalData.promptProfile = true;
+        wx.switchTab({ url: '/pages/mine/mine' });
+      }
     } catch (e) {
       if (!this._isUnloaded) app.showError(e.message);
     }

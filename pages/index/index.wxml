@@ -2,7 +2,7 @@
   <!-- 未登录提示 -->
   <view wx:if="{{!isLogin}}" class="login-tip card">
     <view class="login-tip-content">
-      <text class="title">欢迎使用考勤打卡</text>
+      <text class="title">欢迎使用工作室打卡</text>
       <text class="subtitle">点击下方按钮进行登录</text>
     </view>
     <button class="btn btn-primary" bindtap="onLogin">微信一键登录</button>
@@ -56,7 +56,7 @@
       </view>
       <view class="action-item" bindtap="goToStatistics">
         <text class="action-icon">📊</text>
-        <text class="action-text">考勤统计</text>
+        <text class="action-text">到访记录</text>
         <text class="action-arrow">></text>
       </view>
       <view class="action-item" bindtap="onRefresh">
@@ -79,6 +79,6 @@
       </view>
       -->
     </view>
-
-  </block>  <!-- 这里是闭合 block wx:else -->
+  </block>
+  <!-- 这里是闭合 block wx:else -->
 </view>

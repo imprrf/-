@@ -8,23 +8,12 @@ const {
   requireAdmin,
   initializeRoles
 } = require('./db');
-const { minuteOf, locationAudit } = require('./attendance');
+const { locationAudit } = require('./attendance');
 function validDate(value) {
   return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value);
 }
 function configFields(input) {
   const data = {};
-  for (const key of ['workStartTime', 'workEndTime'])
-    if (input[key] !== undefined) {
-      minuteOf(input[key]);
-      data[key] = input[key];
-    }
-  for (const key of ['lateMinutes', 'earlyMinutes'])
-    if (input[key] !== undefined) {
-      if (!Number.isFinite(input[key]) || input[key] < 0 || input[key] > 1440)
-        throw new Error('宽限分钟数无效');
-      data[key] = input[key];
-    }
   if (input.location !== undefined) {
     const center = input.location;
     if (!center || typeof center.name !== 'string' || center.name.length > 200)
@@ -108,15 +97,8 @@ async function adminOps(db, openid, event, now) {
       const actorNow = await optional(tx.collection('users').doc(actor._id));
       if (role(actorNow) !== 'admin') throw new Error('无管理员权限');
       const ref = tx.collection('config').doc('main_config');
-      const current = (await optional(ref)) || {
-        workStartTime: '09:00',
-        workEndTime: '18:00',
-        lateMinutes: 0,
-        earlyMinutes: 0
-      };
+      const current = (await optional(ref)) || {};
       const next = { ...current, ...data, updateTime: now };
-      if (minuteOf(next.workEndTime) <= minuteOf(next.workStartTime))
-        throw new Error('暂不支持跨夜班次');
       if (!next.location) throw new Error('请设置考勤地点');
       delete next._id;
       await ref.set({ data: next });

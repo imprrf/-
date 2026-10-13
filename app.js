@@ -16,6 +16,13 @@ App({
     return normalized;
   },
 
+  // 新用户默认姓名为“微信用户”、手机号为空，登录后需引导补全。
+  needsProfile(user) {
+    if (!user) return false;
+    const name = (user.name || '').trim();
+    return !name || name === '微信用户' || !(user.phone || '').trim();
+  },
+
   isUserAdmin(user) {
     if (!user) return false;
     const role = (user.role || '').toLowerCase();
@@ -124,8 +131,10 @@ App({
       this.globalData.isAdmin = false;
 
       // 异步同步用户信息（不阻塞 onLaunch）
-      this.syncUserInfo(normalizedUser).catch((e) => {
-        console.error('同步用户信息失败');
+      // 页面可等待该 Promise，在身份同步完成后刷新管理员入口。
+      this.syncPromise = this.syncUserInfo(normalizedUser).catch((e) => {
+        const cause = e && e.cause;
+        console.error('同步用户信息失败:', (e && e.message) || '', (cause && cause.errMsg) || '');
       });
     }
   },
@@ -144,7 +153,7 @@ App({
   async login() {
     wx.showLoading({ title: '登录中...', mask: true });
     try {
-      const result = await CloudService.call('login');
+      const result = await CloudService.call('login', {}, this);
       return this.applyServerUser(result.user, result.openid);
     } catch (error) {
       wx.showToast({ title: '登录失败', icon: 'none' });
@@ -155,8 +164,24 @@ App({
   },
 
   // 只从服务端刷新身份，绝不向数据库回写本地角色或资料。
+  // 页面显示时刷新身份（如被撤销管理员），限频以免每次切页都写 lastLoginTime。
+  refreshIdentity(minIntervalMs = 30000) {
+    if (!this.globalData.isLogin) return Promise.resolve();
+    const now = Date.now();
+    if (this._identityPromise || now - (this._identityAt || 0) < minIntervalMs) {
+      return this._identityPromise || Promise.resolve();
+    }
+    this._identityAt = now;
+    this._identityPromise = this.syncUserInfo()
+      .catch(() => {})
+      .finally(() => {
+        this._identityPromise = null;
+      });
+    return this._identityPromise;
+  },
+
   async syncUserInfo() {
-    const result = await CloudService.call('login');
+    const result = await CloudService.call('login', {}, this);
     // 请求期间已退出登录时，不能重新恢复登录。
     if (!this.globalData.isLogin) return;
     this.applyServerUser(result.user, result.openid);
@@ -167,7 +192,7 @@ App({
     for (const key of ['name', 'phone', 'avatar', 'realName']) {
       if (userInfo[key] !== undefined) profile[key] = userInfo[key];
     }
-    const result = await CloudService.call('updateUserInfo', { profile });
+    const result = await CloudService.call('updateUserInfo', { profile }, this);
     return this.applyServerUser(result.user);
   },
 
@@ -188,10 +213,6 @@ App({
       // 只在没有配置或没有 location 时才使用默认值
       if (!config) {
         config = {
-          workStartTime: '09:00',
-          workEndTime: '18:00',
-          lateMinutes: 0,
-          earlyMinutes: 0,
           location: defaultLocation
         };
       } else if (!config.location) {
@@ -203,10 +224,6 @@ App({
     } catch (e) {
       console.error('加载配置失败，使用默认配置');
       this.globalData.config = {
-        workStartTime: '09:00',
-        workEndTime: '18:00',
-        lateMinutes: 0,
-        earlyMinutes: 0,
         location: defaultLocation
       };
     }
