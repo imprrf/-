@@ -1,162 +1,76 @@
 <view class="page-container">
-  <!-- 统计概览卡片 -->
   <view class="stats-overview card">
-    <view class="stats-header">
-      <text class="stats-title">{{user.name || '成员'}} 本月统计</text>
-    </view>
+    <view class="stats-header"><text class="stats-title">{{user.name || '成员'}} 月度统计</text></view>
     <view class="stats-grid">
-      <view class="stat-box">
-        <text class="stat-value text-success">{{stats.presentDays}}</text>
-        <text class="stat-label">出勤</text>
-      </view>
-      <view class="stat-box">
-        <text class="stat-value text-gray">{{stats.absentDays}}</text>
-        <text class="stat-label">缺卡</text>
-      </view>
+      <view class="stat-box"><text class="stat-value text-success">{{stats.presentDays}}</text><text class="stat-label">出勤</text></view>
+      <view class="stat-box"><text class="stat-value text-gray">{{stats.absentDays}}</text><text class="stat-label">缺卡</text></view>
+      <view class="stat-box"><text class="stat-value">{{stats.lateDays}}</text><text class="stat-label">迟到</text></view>
+      <view class="stat-box"><text class="stat-value">{{stats.earlyDays}}</text><text class="stat-label">早退</text></view>
     </view>
   </view>
-
-  <!-- 月份选择器 -->
   <view class="month-selector card">
-    <view class="month-btn" bindtap="prevMonth">
-      <text class="icon">‹</text>
-    </view>
+    <view class="month-btn" bindtap="prevMonth">‹</view>
     <text class="month-text">{{year}}年{{month}}月</text>
-    <view class="month-btn" bindtap="nextMonth">
-      <text class="icon">›</text>
-    </view>
+    <view class="month-btn" bindtap="nextMonth">›</view>
   </view>
-
-  <!-- 周统计视图 -->
   <view class="card week-summary">
-    <view class="summary-header">
-      <text class="summary-title">最近7天统计</text>
-      <text class="summary-total">本周时长：{{formatWeekTotal(weekTotalMinutes)}}</text>
-    </view>
-
+    <view class="summary-header"><text class="summary-title">最近7天统计</text><text class="summary-total">总时长：{{weekTotalText}}</text></view>
     <view class="chart-wrap">
       <view class="chart-item" wx:for="{{weekStats}}" wx:key="key">
-        <view class="chart-col">
-          <view class="chart-bar" style="height: {{item.barHeight}}%"></view>
-        </view>
-        <text class="chart-label">{{item.label}}</text>
-        <text class="chart-value">{{item.count}}次</text>
+        <view class="chart-col"><view class="chart-bar" style="height: {{item.barHeight}}%"></view></view>
+        <text class="chart-label">{{item.label}}</text><text class="chart-value">{{item.count}}次</text>
       </view>
     </view>
   </view>
-
-  <!-- 日历视图 -->
   <view class="calendar card">
-    <view class="calendar-header">
-      <view class="week-day" wx:for="{{weekDays}}" wx:key="*this">{{item}}</view>
-    </view>
+    <view class="calendar-header"><view class="week-day" wx:for="{{weekDays}}" wx:key="*this">{{item}}</view></view>
     <view class="calendar-body">
-      <view 
-        class="calendar-day {{item.status ? getStatusClass(item.status) : ''}}"
-        wx:for="{{calendarGrid}}" 
-        wx:key="index"
-        data-date="{{item.date}}"
-        bindtap="onDateTap"
-      >
-        {{item.day}}
-      </view>
+      <view class="calendar-day {{item.status ? 'status-' + item.status : ''}}" wx:for="{{calendarGrid}}" wx:key="index" data-date="{{item.date}}" bindtap="onDateTap">{{item.day}}</view>
     </view>
     <view class="calendar-legend">
-      <view class="legend-item">
-        <view class="legend-dot status-normal"></view>
-        <text>已打卡</text>
-      </view>
-      <view class="legend-item">
-        <view class="legend-dot status-absent"></view>
-        <text>缺卡</text>
-      </view>
+      <view class="legend-item"><view class="legend-dot status-normal"></view><text>正常</text></view>
+      <view class="legend-item"><view class="legend-dot status-late"></view><text>迟到/早退</text></view>
+      <view class="legend-item"><view class="legend-dot status-absent"></view><text>缺卡</text></view>
     </view>
   </view>
-
-  <!-- 打卡记录列表 -->
   <view class="records-section">
     <view class="section-title">打卡明细</view>
     <view class="records-list">
-      <view 
-        class="record-item card"
-        wx:for="{{records}}"
-        wx:key="date"
-        data-record="{{item}}"
-        bindtap="onRecordItemTap"
-      >
+      <view class="record-item card" wx:for="{{records}}" wx:key="_id" data-record="{{item}}" bindtap="onRecordItemTap">
         <view class="record-date">
           <text class="date-text">{{item.date}}</text>
-          <text class="status-tag {{getStatusClass(item.status)}}">
-            {{getStatusText(item.status)}}
-          </text>
+          <text class="status-tag status-{{item.attendanceStatus}}">{{item.statusText}}{{item.expired ? ' · 未签退' : ''}}</text>
         </view>
         <view class="record-times">
-          <view class="time-item">
-            <text class="time-label">上班</text>
-            <text class="time-value">{{item.clockIn || '--:--'}}</text>
-          </view>
+          <view class="time-item"><text class="time-label">上班</text><text class="time-value">{{item.checkInTime || '--:--'}}</text></view>
           <view class="divider">|</view>
-          <view class="time-item">
-            <text class="time-label">下班</text>
-            <text class="time-value">{{item.clockOut || '--:--'}}</text>
-          </view>
-          <view class="divider" wx:if="{{item.duration}}">|</view>
-          <view class="time-item" wx:if="{{item.duration}}">
-            <text class="time-label">时长</text>
-            <text class="time-value">{{formatDuration(item.duration)}}</text>
-          </view>
+          <view class="time-item"><text class="time-label">下班</text><text class="time-value">{{item.outTime}}</text></view>
+          <view class="time-item"><text class="time-label">时长</text><text class="time-value">{{item.durationText}}</text></view>
         </view>
+        <text class="text-error" wx:if="{{item.outOfRange}}">超出范围</text>
+        <text class="text-gray" wx:if="{{item.locationUnavailable}}">定位缺失</text>
       </view>
     </view>
-    <view class="empty-state" wx:if="{{records.length === 0 && !loading}}">
-      <text>暂无打卡记录</text>
-    </view>
+    <view class="empty-state" wx:if="{{records.length === 0 && !loading}}">暂无打卡记录</view>
   </view>
-
-  <!-- 加载状态 -->
-  <view class="loading-state" wx:if="{{loading}}">
-    <text>加载中...</text>
-  </view>
-
-  <!-- 记录详情弹窗 -->
+  <view class="loading-state" wx:if="{{loading}}">加载中...</view>
   <view class="detail-modal" wx:if="{{showRecordDetail}}" bindtap="closeDetail">
     <view class="detail-content" catchtap="">
-      <view class="detail-header">
-        <text class="detail-title">{{selectedRecord.date}} 打卡详情</text>
-        <view class="close-btn" bindtap="closeDetail">×</view>
-      </view>
-      
+      <view class="detail-header"><text class="detail-title">{{selectedRecord.date}} 打卡详情</text><view class="close-btn" bindtap="closeDetail">×</view></view>
       <view class="detail-body">
         <view class="detail-section">
           <text class="section-label">上班打卡</text>
-          <view class="detail-row">
-            <text class="detail-label">时间</text>
-            <text class="detail-value">{{selectedRecord.clockIn || '--:--'}}</text>
-          </view>
-          <view class="detail-row" wx:if="{{selectedRecord.locationIn}}">
-            <text class="detail-label">位置</text>
-            <text class="detail-value">{{selectedRecord.locationIn.address || '未知位置'}}</text>
-          </view>
+          <view class="detail-row"><text class="detail-label">时间</text><text class="detail-value">{{selectedRecord.checkInTime || '--:--'}}</text></view>
+          <view class="detail-row" wx:if="{{selectedRecord.checkInLocation}}"><text class="detail-label">位置</text><text class="detail-value">{{selectedRecord.checkInLocation.latitude}}, {{selectedRecord.checkInLocation.longitude}}</text></view>
         </view>
-        
-        <view class="detail-section" wx:if="{{selectedRecord.clockOut}}">
+        <view class="detail-section">
           <text class="section-label">下班打卡</text>
-          <view class="detail-row">
-            <text class="detail-label">时间</text>
-            <text class="detail-value">{{selectedRecord.clockOut}}</text>
-          </view>
-          <view class="detail-row" wx:if="{{selectedRecord.locationOut}}">
-            <text class="detail-label">位置</text>
-            <text class="detail-value">{{selectedRecord.locationOut.address || '未知位置'}}</text>
-          </view>
+          <view class="detail-row"><text class="detail-label">时间</text><text class="detail-value">{{selectedRecord.outTime}}</text></view>
+          <view class="detail-row" wx:if="{{selectedRecord.checkOutLocation}}"><text class="detail-label">位置</text><text class="detail-value">{{selectedRecord.checkOutLocation.latitude}}, {{selectedRecord.checkOutLocation.longitude}}</text></view>
         </view>
-        
-        <view class="detail-section" wx:if="{{selectedRecord.duration > 0}}">
-          <view class="detail-row">
-            <text class="detail-label">工作时长</text>
-            <text class="detail-value highlight">{{formatDuration(selectedRecord.duration)}}</text>
-          </view>
-        </view>
+        <view class="detail-row"><text class="detail-label">工作时长</text><text class="detail-value highlight">{{selectedRecord.durationText}}</text></view>
+        <text wx:if="{{selectedRecord.outOfRange}}" class="text-error">超出范围</text>
+        <text wx:if="{{selectedRecord.locationUnavailable}}" class="text-gray">定位缺失</text>
       </view>
     </view>
   </view>

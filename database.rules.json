@@ -1,0 +1,9 @@
+{
+  "users": { "read": "auth.openid != null && doc._openid == auth.openid", "write": false },
+  "records": { "read": "auth.openid != null && doc._openid == auth.openid", "write": false },
+  "config": { "read": "auth.openid != null", "write": false },
+  "roleLogs": { "read": false, "write": false },
+  "security_state": { "read": false, "write": false },
+  "checkin_state": { "read": false, "write": false },
+  "checkin_requests": { "read": false, "write": false }
+}

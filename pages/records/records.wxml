@@ -32,7 +32,7 @@
           {{item.inTime}} 进 → {{item.outTime}} 出
         </text>
         <text class="duration">{{item.duration}}</text>
-        <text class="status-tag {{item.status}}">{{item.status === 'normal' ? '正常' : (item.status === 'late' ? '迟到' : '早退')}}</text>
+        <text class="status-tag {{item.status}}">{{item.statusText}}</text>
       </view>
     </block>
     <block wx:else>

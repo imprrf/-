@@ -1,45 +1,38 @@
 # 考勤打卡小程序
 
-基于微信小程序 + 云开发的考勤打卡系统，支持定位打卡、打卡记录查询、管理员后台等功能。
+微信小程序原生 JS + 微信云开发，支持同日多次进出、距离软校验、迟到早退统计和成员管理。
 
-## 技术栈
+## 模块
 
-- 微信小程序原生框架（JS，非 TypeScript）
-- 微信云开发（云数据库 + 云函数）
-- 本地存储降级方案（云服务不可用时自动切换到 `wx.setStorageSync`）
+- `app.js`：云服务初始化、权威身份缓存、登录、资料保存与定位。
+- `services/DbService.js`：云数据库按 20 条循环分页，未指定 limit 时读全量；openid 双向映射；本地降级仅支持等值和嵌套字段等值。
+- `services/RecordModel.js`：唯一的记录展示适配、时长和北京时间处理；旧数据只读兼容。
+- `services/CheckinService.js`：本人记录查询、成员授权查询和共享统计口径。
+- `services/CloudService.js`：云函数调用、业务拒绝与网络失败区分、管理员分页查询。
+- `cloudfunctions/_shared/`：db（身份与锁状态）、auth（登录与资料）、attendance（打卡）、admin（管理操作）、core（调用上下文与错误边界）。修改后执行 `npm run sync:cloud` 复制到各部署目录，云函数不会跨目录 require。
+- `cloudfunctions/login/`、`checkin/`、`adminOps/`、`updateUserInfo/`：独立部署的云函数。
+- `pages/index/`、`records/`、`mine/`、`admin/`：打卡、记录、个人中心和管理员页面；班次空壳页已移除。
 
-## 项目结构
+## 开发与检查
 
-```
-miniprogram/
-├── app.js                  # 全局逻辑：登录、云开发初始化、定位、全局工具方法
-├── app.json                # 小程序页面路由、权限、tabBar 配置
-├── cloudfunctions/
-│   ├── getOpenid/          # 获取用户 openid
-│   └── updateUserInfo/     # 更新用户信息（含手机号解密）
-├── pages/
-│   ├── index/               # 打卡主页
-│   ├── records/              # 打卡记录查询
-│   ├── mine/                 # 个人中心
-│   └── admin/                 # 管理员后台（配置、成员管理、位置设置）
-└── services/
-    ├── DbService.js         # 数据访问层（云数据库 / 本地存储双模式）
-    ├── CheckinService.js    # 打卡业务逻辑
-    └── ConfigService.js     # 考勤配置（工作时间、打卡地点）管理
+用微信开发者工具打开本目录。`project.config.json` 当前为游客 AppID，云环境在 `app.js`；真实上线需配置有权限的 AppID 和云环境。
+
+```bash
+npm run sync:cloud
+npm run check
+npm test
 ```
 
-## 本地开发
+以上检查只需 Node.js。代码格式采用两空格、单引号、分号，职责按模块拆分；测试覆盖真实问题和权限边界。本地云数据库模型测试不代替微信真机或云端事务验收。
 
-1. 用微信开发者工具打开 `miniprogram` 目录（注意：是这个子目录，不是项目根目录）
-2. AppID 选择"测试号"（`project.config.json` 里配置的 `appid` 为 `touristappid`，游客模式）
-3. 云开发环境 ID 配置在 `app.js` 的 `initCloudSafely()` 方法里（`cloud1-d4g22few1dfa58dd6`）
+## 业务约定与上线
 
-## 已知问题
+详见 [记录结构](./RECORD_SCHEMA.md)、[修复计划](./FIX_PLAN.md) 和 [部署与回归](./DEPLOYMENT.md)。本轮本地代码已加入服务端鉴权和写入入口，**尚未部署云函数、应用权限规则或完成云端验收**。新前端必须配套部署新的四个云函数。
 
-详见 [AUDIT.md](./AUDIT.md)，重点关注"严重问题"章节（打卡距离校验、数据库权限、管理员鉴权均只在前端做，未经服务端强制校验）。
+时间统一为北京时间。缺卡仅统计截至今天的周一到周五，出勤按日期去重，周末出勤不能抵扣工作日缺卡；当前不纳入法定节假日、调休，不支持跨夜班次。距离超过半径不拒绝打卡；没有定位时记录“定位缺失”，管理员可查看异常标记。
 
-## Git 分支说明（2026-10-08 梳理）
+打卡、资料、角色和配置写入只走云函数。云服务失败时显示失败，不降级为本地写入成功。DbService 的本地存储兼容仅供离线数据读取和单元验证，不能作为可信身份、权限或考勤结果。
 
-- `main`：当前主线，开发到 2026-09-14，是时间上最新的分支
-- `feature/multi-checkin`：早期分支，停更于 2026-06-29，与 `main` 历史已分叉（无共同祖先，推测仓库曾被重建），**不建议继续在此分支开发**，内容已过时
-- `v1.0.2`：标记在 2026-10-08 跨设备部署时的基线提交，用于回滚参考
+## Git
+
+实际仓库位于本目录，外层 `wx_program` 另有仓库并以 gitlink 指向小程序。本轮在 `fix/security-hardening` 上修改，起点为 `a4e2e12`。既有 `main` 跟踪 `origin/feature/multi-checkin` 且已分叉，不自动合并或推送。`v1.0.2` 保留为历史回滚参考，本轮更准确的恢复基线与完整本地备份见 DEPLOYMENT.md。

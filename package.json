@@ -1,0 +1,10 @@
+{
+  "name": "attendance-miniprogram",
+  "version": "1.0.2",
+  "private": true,
+  "scripts": {
+    "test": "node --test tests/fix-plan.test.js",
+    "check": "node scripts/check.js",
+    "sync:cloud": "node scripts/sync-cloud.js"
+  }
+}

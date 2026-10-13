@@ -1,6 +1,8 @@
 /**
  * services/DbService.js - 数据库服务
- * @description 使用本地存储进行数据持久化
+ * @description 云数据库分页访问与本地等值查询降级；云端错误不会切换为本地成功。
+ * 云端写入由 SDK 生成 _openid，查询将 openid 映射为 _openid，读取补回 openid。
+ * 本地写入保留 openid；本地仅支持等值与嵌套字段，不支持 SDK 指令。
  */
 
 class DbService {
@@ -68,24 +70,22 @@ class DbService {
   // 查询单条记录
   async getOne(collectionName, query) {
     try {
-      console.log(`[DbService.getOne] 查询: ${collectionName}`, query);
       const db = this.getCloudDatabase();
       if (db) {
         // 如果查询条件只有 _id，直接用 doc() 查询（避免自动添加 _openid 限制）
         if (query._id && Object.keys(query).length === 1) {
           const result = await db.collection(collectionName).doc(query._id).get();
           const data = result.data ? this.normalizeData(result.data) : null;
-          console.log(`[DbService.getOne] 查询结果:`, data ? '找到' : '未找到');
           return data;
         }
 
         // 其他情况用 where() 查询
-        const result = await db.collection(collectionName)
+        const result = await db
+          .collection(collectionName)
           .where(this.normalizeQuery(query))
           .limit(1)
           .get();
         const data = result.data.length ? this.normalizeData(result.data[0]) : null;
-        console.log(`[DbService.getOne] 查询结果:`, data ? '找到' : '未找到');
         return data;
       }
       const ids = this.getCollectionIds(collectionName);
@@ -108,27 +108,34 @@ class DbService {
     try {
       const db = this.getCloudDatabase();
       if (db) {
-        let request = db.collection(collectionName).where(this.normalizeQuery(query));
-        if (options.orderBy) {
-          request = request.orderBy(options.orderBy.field, options.orderBy.order);
+        const result = [];
+        const maximum = options.limit === undefined ? Infinity : Math.max(0, options.limit);
+        let offset = options.skip || 0;
+        // 小程序端按 20 条翻页；缺省取全量，不依赖 SDK 的默认上限。
+        while (result.length < maximum) {
+          let request = db.collection(collectionName).where(this.normalizeQuery(query));
+          if (options.orderBy)
+            request = request.orderBy(options.orderBy.field, options.orderBy.order);
+          if (!options.orderBy || options.orderBy.field !== '_id')
+            request = request.orderBy('_id', 'asc');
+          const size = Math.min(20, maximum - result.length);
+          const page = await request.skip(offset).limit(size).get();
+          result.push(...page.data.map((item) => this.normalizeData(item)));
+          if (page.data.length < size) break;
+          offset += page.data.length;
         }
-        if (options.skip) request = request.skip(options.skip);
-        // 默认 limit 1000，避免云 SDK 默认 20 条导致数据截断
-        const limit = options.limit !== undefined ? options.limit : 1000;
-        request = request.limit(limit);
-        const result = await request.get();
-        return result.data.map(item => this.normalizeData(item));
+        return result;
       }
       const ids = this.getCollectionIds(collectionName);
       let result = [];
-      
+
       for (const id of ids) {
         const item = wx.getStorageSync(this.getKey(collectionName, id));
         if (item && this.matchQuery(item, query)) {
           result.push(item);
         }
       }
-      
+
       // 排序
       if (options.orderBy) {
         const { field, order } = options.orderBy;
@@ -141,18 +148,19 @@ class DbService {
           return valA > valB ? 1 : valA < valB ? -1 : 0;
         });
       }
-      
+
       // 分页
       if (options.skip) {
         result = result.slice(options.skip);
       }
-      if (options.limit) {
+      if (options.limit !== undefined) {
         result = result.slice(0, options.limit);
       }
-      
+
       return result;
     } catch (e) {
       console.error(`查询失败: ${collectionName}`, e);
+      if (options.throwOnError) throw e;
       return [];
     }
   }
@@ -168,12 +176,10 @@ class DbService {
         delete cloudData.openid;
         if (data._id) {
           // 对于指定 _id 的插入，用 set 做到"有则覆盖、无则创建"
-          console.log(`[DbService.add] 使用 set 模式，collection: ${collectionName}, _id: ${data._id}`);
           await db.collection(collectionName).doc(data._id).set({ data: cloudData });
           return { success: true, id: data._id };
         }
         // 无 _id 时才用 add（自动生成 _id）
-        console.log(`[DbService.add] 使用 add 模式，collection: ${collectionName}`);
         const result = await db.collection(collectionName).add({ data: cloudData });
         return { success: true, id: result._id };
       }
@@ -183,15 +189,15 @@ class DbService {
         _id: id,
         _createTime: Date.now()
       };
-      
+
       // 保存数据
       wx.setStorageSync(this.getKey(collectionName, id), newData);
-      
+
       // 更新ID列表
       const ids = this.getCollectionIds(collectionName);
-      ids.push(id);
+      if (!ids.includes(id)) ids.push(id);
       this.saveCollectionIds(collectionName, ids);
-      
+
       return { success: true, id };
     } catch (e) {
       console.error(`新增失败: ${collectionName}`, e);
@@ -210,16 +216,34 @@ class DbService {
         delete cloudData.openid;
 
         // 对于有 _id 的精确查询，使用 doc().update 确保原子性
-        if (query._id) {
-          const result = await db.collection(collectionName)
+        if (query._id && Object.keys(query).length === 1) {
+          const result = await db
+            .collection(collectionName)
             .doc(query._id)
             .update({ data: cloudData });
           // 读取真实的更新数量，而不是硬编码 1
           const updated = result.stats ? result.stats.updated : 0;
-          return { success: updated > 0, updated };
+          if (updated > 0) return { success: true, updated };
+          let existing;
+          try {
+            existing = (await db.collection(collectionName).doc(query._id).get()).data;
+          } catch (error) {
+            if (
+              !/document.*(not exist|not found)|文档不存在/i.test(
+                error.message || error.errMsg || String(error)
+              )
+            )
+              throw error;
+          }
+          return {
+            success: !!existing,
+            updated,
+            reason: existing ? 'unchanged' : 'missing'
+          };
         }
 
-        const result = await db.collection(collectionName)
+        const result = await db
+          .collection(collectionName)
           .where(this.normalizeQuery(query))
           .update({ data: cloudData });
         const updated = result.stats ? result.stats.updated : 0;
@@ -227,7 +251,7 @@ class DbService {
       }
       const ids = this.getCollectionIds(collectionName);
       let updated = 0;
-      
+
       for (const id of ids) {
         const item = wx.getStorageSync(this.getKey(collectionName, id));
         if (item && this.matchQuery(item, query)) {
@@ -240,10 +264,11 @@ class DbService {
           updated++;
         }
       }
-      
-      return { 
-        success: true, 
-        updated 
+
+      return {
+        success: updated > 0,
+        updated,
+        reason: updated > 0 ? undefined : 'missing'
       };
     } catch (e) {
       console.error(`更新失败: ${collectionName}`, e);
@@ -256,7 +281,8 @@ class DbService {
     try {
       const db = this.getCloudDatabase();
       if (db) {
-        const result = await db.collection(collectionName)
+        const result = await db
+          .collection(collectionName)
           .where(this.normalizeQuery(query))
           .remove();
         return { success: true, removed: result.stats.removed };
@@ -264,7 +290,7 @@ class DbService {
       const ids = this.getCollectionIds(collectionName);
       let removed = 0;
       const newIds = [];
-      
+
       for (const id of ids) {
         const item = wx.getStorageSync(this.getKey(collectionName, id));
         if (item && this.matchQuery(item, query)) {
@@ -274,9 +300,9 @@ class DbService {
           newIds.push(id);
         }
       }
-      
+
       this.saveCollectionIds(collectionName, newIds);
-      
+
       return { success: true, removed };
     } catch (e) {
       console.error(`删除失败: ${collectionName}`, e);
@@ -289,21 +315,22 @@ class DbService {
     try {
       const db = this.getCloudDatabase();
       if (db) {
-        const result = await db.collection(collectionName)
+        const result = await db
+          .collection(collectionName)
           .where(this.normalizeQuery(query))
           .count();
         return result.total;
       }
       const ids = this.getCollectionIds(collectionName);
       let count = 0;
-      
+
       for (const id of ids) {
         const item = wx.getStorageSync(this.getKey(collectionName, id));
         if (item && this.matchQuery(item, query)) {
           count++;
         }
       }
-      
+
       return count;
     } catch (e) {
       console.error(`统计失败: ${collectionName}`, e);
@@ -316,13 +343,20 @@ class DbService {
     if (!query || Object.keys(query).length === 0) {
       return true;
     }
-    
+
     for (const key in query) {
-      if (item[key] !== query[key]) {
+      const value = key
+        .split('.')
+        .reduce((current, part) => current && current[part], this.normalizeData(item));
+      if (query[key] && typeof query[key] === 'object') {
+        throw new Error('本地模式仅支持等值查询，不支持数组、区间或 SDK 指令');
+      }
+      const queryKey = key === '_openid' ? item._openid || item.openid : value;
+      if (queryKey !== query[key]) {
         return false;
       }
     }
-    
+
     return true;
   }
 }

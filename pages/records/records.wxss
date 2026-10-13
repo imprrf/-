@@ -79,7 +79,8 @@
   background-color: #ff4d4f;
 }
 
-.dot.yellow {
+.dot.yellow,
+.dot.orange {
   background-color: #faad14;
 }
 
@@ -130,7 +131,8 @@
   background-color: #52c41a;
 }
 
-.status-tag.late {
+.status-tag.late,
+.status-tag.late_early {
   background-color: #ff4d4f;
 }
 

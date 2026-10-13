@@ -20,7 +20,7 @@
             <text class="user-date">{{item.date || ''}}</text>
           </view>
           <view class="status-badge">
-            {{item.status === 'Complete' || item.clockOut ? '已完成' : '进行中'}}
+            {{item.expired ? '未签退' : (item.status === 'Complete' ? '已完成' : '进行中')}}
           </view>
         </view>
         
@@ -28,18 +28,19 @@
           <view class="time-group">
             <view class="time-item">
               <text class="time-label">上班签到</text>
-              <text class="time-value">{{item.clockIn || item.checkInTime || '--:--'}}</text>
+              <text class="time-value">{{item.checkInTime || '--:--'}}</text>
             </view>
             <view class="time-divider"></view>
             <view class="time-item">
               <text class="time-label">下班签退</text>
-              <text class="time-value">{{item.clockOut || item.checkOutTime || '--:--'}}</text>
+              <text class="time-value">{{item.outTime}}</text>
             </view>
           </view>
           
-          <view class="duration-row" wx:if="{{item.duration || item.totalWorkTime}}">
-            <text class="duration-text">⏱️ 工作时长：{{item.duration ? (item.duration + '分钟') : (item.totalWorkTime || '--')}}</text>
-          </view>
+          <view class="duration-row"><text class="duration-text">⏱️ 工作时长：{{item.durationText}}</text></view>
+          <text>{{item.statusText}}</text>
+          <text class="text-error" wx:if="{{item.outOfRange}}"> · 超出范围</text>
+          <text class="text-gray" wx:if="{{item.locationUnavailable}}"> · 定位缺失</text>
           
           <view class="location-row" wx:if="{{item.locationIn && item.locationIn.address || item.checkInLocation && item.checkInLocation.name}}">
             <text class="location-text">📍 {{item.locationIn && item.locationIn.address || item.checkInLocation && item.checkInLocation.name || '未知位置'}}</text>
@@ -47,6 +48,7 @@
         </view>
       </view>
     </scroll-view>
+    <button wx:if="{{hasMore}}" bindtap="loadMore" loading="{{loading}}">加载更多</button>
     
     <view class="empty-state" wx:else>
       <text class="empty-icon">📂</text>
@@ -57,6 +59,6 @@
   <!-- 页面底部 -->
   <view class="page-footer">
     <text class="copyright">© 璧山机电大学高能束实验室</text>
-    <text class="version" bindtap="tapSystemConfig">当前系统版本 v1.0.6 (Build 2026)</text>
+    <text class="version" bindtap="tapSystemConfig">当前系统版本 v{{appVersion}}</text>
   </view>
 </view>

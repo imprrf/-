@@ -3,7 +3,7 @@
  * @description 负责全局状态管理、用户登录、数据初始化、定位优化
  */
 
-const DbService = require('./services/DbService');
+const CloudService = require('./services/CloudService');
 const ConfigService = require('./services/ConfigService');
 const APP_VERSION = '1.0.2';
 
@@ -12,14 +12,14 @@ App({
     const normalized = { ...user };
     const role = (normalized.role || '').toLowerCase();
     normalized.role = role || (normalized.isAdmin ? 'admin' : 'member');
-    normalized.isAdmin = normalized.role === 'admin' || !!normalized.isAdmin;
+    normalized.isAdmin = normalized.role === 'admin';
     return normalized;
   },
 
   isUserAdmin(user) {
     if (!user) return false;
     const role = (user.role || '').toLowerCase();
-    return role === 'admin' || !!user.isAdmin;
+    return role ? role === 'admin' : !!user.isAdmin;
   },
 
   globalData: {
@@ -36,13 +36,14 @@ App({
   },
 
   onLaunch() {
-      // 捕获未处理的Promise reject
-      if (typeof wx.onUnhandledRejection === 'function') {
-        wx.onUnhandledRejection((res) => {
+    // 捕获未处理的Promise reject
+    if (typeof wx.onUnhandledRejection === 'function') {
+      wx.onUnhandledRejection((res) => {
         const reason = res && res.reason;
-        const message = typeof reason === 'string'
-          ? reason
-          : (reason && reason.errMsg) || (reason && reason.message) || '';
+        const message =
+          typeof reason === 'string'
+            ? reason
+            : (reason && reason.errMsg) || (reason && reason.message) || '';
 
         // 过滤微信开发者工具内部偶发的云服务握手噪音，避免误判为业务代码错误
         if (message.includes('Failed to fetch') || message.includes('webapi_getwxaasyncsecinfo')) {
@@ -51,8 +52,8 @@ App({
         }
 
         console.error('未捕获的Promise异常:', reason);
-        });
-      }
+      });
+    }
 
     // 1. 检查登录状态
     this.checkLogin();
@@ -75,7 +76,6 @@ App({
       });
       this.globalData.cloudReady = true;
       this.globalData.cloudInitError = '';
-      console.log('云开发初始化完成');
       return true;
     } catch (e) {
       this.globalData.cloudReady = false;
@@ -120,196 +120,55 @@ App({
       this.globalData.openid = openid;
       this.globalData.userInfo = normalizedUser;
       this.globalData.isLogin = true;
-      this.globalData.isAdmin = this.isUserAdmin(normalizedUser);
+      // 缓存角色只用于展示；后台同步成功后才恢复管理员入口。
+      this.globalData.isAdmin = false;
 
       // 异步同步用户信息（不阻塞 onLaunch）
-      this.syncUserInfo(normalizedUser).catch(e => {
-        console.log('同步用户信息失败', e);
+      this.syncUserInfo(normalizedUser).catch((e) => {
+        console.error('同步用户信息失败');
       });
     }
   },
 
-  async login() {
-    return new Promise(async (resolve, reject) => {
-      try {
-        wx.showLoading({ title: '登录中...', mask: true });
-
-        if (!this.ensureCloudReady()) {
-          throw new Error(this.globalData.cloudInitError || '云开发不可用，请检查开发者工具网络或云环境配置');
-        }
-  
-        // 1. 获取 openid
-        const cloudRes = await wx.cloud.callFunction({
-          name: 'getOpenid'
-        });
-        if (!cloudRes || !cloudRes.result || !cloudRes.result.openid) {
-          throw new Error('云函数获取openid失败');
-        }
-        const openid = cloudRes.result.openid;
-        console.log('当前登录用户的真实唯一OpenID:', openid);
-  
-        const db = wx.cloud.database();
-  
-        // 2. 统一只用云开发原生的 _openid 查询
-        let queryResult = await db.collection('users').where({
-          _openid: openid
-        }).get();
-        console.log('查询 _openid 结果:', queryResult.data);
-  
-        let userInfo = null;
-        if (queryResult.data.length > 0) {
-          userInfo = queryResult.data[0];
-          console.log('老用户登录成功，成功关联历史数据');
-          
-          // 字段映射：如果有 realName 则赋给 name
-          if (userInfo.realName) {
-            userInfo.name = userInfo.realName;
-          }
-          userInfo.phone = userInfo.phone || '';
-        } else {
-          // 新用户注册（这里不再往数据库存 openid 字段，只保留基本业务字段）
-          // 云开发会自动帮你在数据库记录中生成一个系统的 _openid 字段
-          userInfo = {
-            name: '微信用户',
-            avatar: '',
-            phone: '',
-            role: 'member',
-            isAdmin: false,
-            createTime: Date.now()
-          };
-          
-          // 检查是否为第一个用户
-          const countResult = await db.collection('users').count();
-          if (countResult.total === 0) {
-            userInfo.role = 'admin';
-            userInfo.isAdmin = true;
-          }
-          // 插入新记录
-          await db.collection('users').add({
-            data: userInfo
-          });
-          console.log('新用户注册成功');
-        }
-
-        userInfo = this.normalizeUserRecord(userInfo);
-        
-        // 【关键兼容】在内存中为对象补上 openid 属性，防止后续页面因读取 userInfo.openid 而崩溃
-        userInfo.openid = openid;
-  
-        // 3. 写入缓存与全局状态
-        wx.setStorageSync('openid', openid);
-        wx.setStorageSync('userInfo', userInfo);
-  
-        this.globalData.openid = openid;
-        this.globalData.userInfo = userInfo;
-        this.globalData.isLogin = true;
-        this.globalData.isAdmin = this.isUserAdmin(userInfo);
-  
-        wx.hideLoading();
-        resolve(userInfo);
-      } catch (err) {
-        wx.hideLoading();
-        wx.showToast({ title: '登录失败', icon: 'none' });
-        console.error('登录异常:', err);
-        reject(err);
-      }
-    });
-  },
-  /**
-   * 同步用户信息到数据库
-   */
-  async syncUserInfo(userInfo) {
-    try {
-      const normalizedUser = this.normalizeUserRecord(userInfo);
-      const existingUser = await DbService.getOne('users', { openid: normalizedUser.openid });
-      if (!existingUser) {
-        await DbService.add('users', normalizedUser);
-      } else {
-        const normalizedExisting = this.normalizeUserRecord(existingUser);
-        const nextRole = normalizedExisting.role || normalizedUser.role || 'member';
-        const updateData = {
-          role: nextRole,
-          isAdmin: nextRole === 'admin',
-          lastLoginTime: Date.now(),
-          name: normalizedUser.name || normalizedExisting.name,
-          phone: normalizedUser.phone || normalizedExisting.phone || '',
-          avatar: normalizedUser.avatar || normalizedExisting.avatar || ''
-        };
-
-        if (nextRole === 'admin') {
-          this.globalData.isAdmin = true;
-          normalizedUser.isAdmin = true;
-          normalizedUser.role = 'admin';
-          wx.setStorageSync('userInfo', normalizedUser);
-        }
-        await DbService.update('users', { openid: normalizedUser.openid }, updateData);
-      }
-    } catch (e) {
-      console.log('同步用户信息失败，保存本地备份', e);
-      wx.setStorageSync('localUserInfo', userInfo);
-    }
-  },
-
-  /**
-   * 更新用户信息（资料修改）
-   */
-  async updateUserInfo(userInfo) {
-    try {
-      // 更新本地存储
-      await DbService.update('users', { openid: this.globalData.openid }, userInfo);
-      
-      // 同步更新到云数据库
-      const db = this.getCloudDatabase();
-      if (db) {
-        // 从 userInfo 中移除云数据库保留字段
-        const { _openid, _id, _createTime, _updateTime, ...cleanUserInfo } = { ...userInfo };
-        const cloudUserInfo = {
-          ...cleanUserInfo,
-          // 同时兼容 realName 字段
-          realName: cleanUserInfo.name || cleanUserInfo.realName
-        };
-        
-        // 手动从 cloudUserInfo 里也去掉这些保留字段
-        delete cloudUserInfo._openid;
-        delete cloudUserInfo._id;
-        delete cloudUserInfo._createTime;
-        delete cloudUserInfo._updateTime;
-        
-        console.log('【调试】准备更新云数据库用户信息:', cloudUserInfo);
-        
-        // 先查询是否存在该用户
-        const queryResult = await db.collection('users')
-          .where({ _openid: this.globalData.openid })
-          .get();
-        
-        console.log('【调试】查询用户结果:', queryResult);
-        
-        if (queryResult.data && queryResult.data.length > 0) {
-          // 更新已有用户
-          console.log('【调试】准备更新用户:', queryResult.data[0]._id);
-          await db.collection('users')
-            .doc(queryResult.data[0]._id)
-            .update({
-              data: cloudUserInfo
-            });
-          console.log('【调试】云数据库更新成功');
-        } else {
-          console.log('【调试】准备新增用户:', cloudUserInfo);
-          await db.collection('users').add({
-            data: cloudUserInfo
-          });
-          console.log('【调试】云数据库新增成功');
-        }
-      } else {
-        console.log('【调试】云数据库不可用，跳过云同步');
-      }
-    } catch (e) {
-      console.log('更新用户信息失败', e);
-    }
-    const normalizedUser = this.normalizeUserRecord(userInfo);
+  applyServerUser(user, openid = user._openid || user.openid) {
+    const normalizedUser = this.normalizeUserRecord({ ...user, openid });
+    wx.setStorageSync('openid', openid);
     wx.setStorageSync('userInfo', normalizedUser);
+    this.globalData.openid = openid;
     this.globalData.userInfo = normalizedUser;
+    this.globalData.isLogin = true;
     this.globalData.isAdmin = this.isUserAdmin(normalizedUser);
+    return normalizedUser;
+  },
+
+  async login() {
+    wx.showLoading({ title: '登录中...', mask: true });
+    try {
+      const result = await CloudService.call('login');
+      return this.applyServerUser(result.user, result.openid);
+    } catch (error) {
+      wx.showToast({ title: '登录失败', icon: 'none' });
+      throw error;
+    } finally {
+      wx.hideLoading();
+    }
+  },
+
+  // 只从服务端刷新身份，绝不向数据库回写本地角色或资料。
+  async syncUserInfo() {
+    const result = await CloudService.call('login');
+    // 请求期间已退出登录时，不能重新恢复登录。
+    if (!this.globalData.isLogin) return;
+    this.applyServerUser(result.user, result.openid);
+  },
+
+  async updateUserInfo(userInfo) {
+    const profile = {};
+    for (const key of ['name', 'phone', 'avatar', 'realName']) {
+      if (userInfo[key] !== undefined) profile[key] = userInfo[key];
+    }
+    const result = await CloudService.call('updateUserInfo', { profile });
+    return this.applyServerUser(result.user);
   },
 
   /**
@@ -341,9 +200,8 @@ App({
       // 已有配置直接使用
 
       this.globalData.config = config;
-      console.log('考勤配置加载完成:', this.globalData.config);
     } catch (e) {
-      console.log('加载配置失败，使用默认配置', e);
+      console.error('加载配置失败，使用默认配置');
       this.globalData.config = {
         workStartTime: '09:00',
         workEndTime: '18:00',
@@ -362,8 +220,8 @@ App({
   },
 
   /* ---------- 定位相关（优化版，解决重复获取与超时） ---------- */
-  _locationCache: null,   // 缓存结果
-  _locationLock: false,   // 防止并发重复获取
+  _locationCache: null, // 缓存结果
+  _locationLock: false, // 防止并发重复获取
 
   /**
    * 获取用户位置（高精度，已去重）
@@ -395,8 +253,6 @@ App({
         isHighAccuracy: enableHighAccuracy,
         highAccuracyExpireTime: 5000,
         success: (res) => {
-          console.log(force ? '【打卡】强制获取最新位置成功:' : '【首页】获取缓存位置成功:', res);
-
           const locationData = {
             latitude: res.latitude,
             longitude: res.longitude,
@@ -414,7 +270,7 @@ App({
           resolve(res);
         },
         fail: (err) => {
-          console.log('获取位置失败:', err);
+          console.error('获取位置失败');
           this.globalData.hasLocationAuth = false;
           this._locationLock = false;
 
@@ -513,8 +369,8 @@ App({
   showError(msg) {
     wx.showToast({ title: msg, icon: 'none', duration: 2000 });
   },
-  
+
   showSuccess(msg) {
     wx.showToast({ title: msg, icon: 'success', duration: 1500 });
-  },
+  }
 });

@@ -7,12 +7,17 @@ Page({
     isLogin: false,
     userInfo: null,
     isAdmin: false,
-    appVersion: app.globalData.appVersion || '1.0.1',
+    appVersion: app.globalData.appVersion,
     attendanceInfo: {
-      workDays: 0, presentDays: 0, lateDays: 0, earlyDays: 0, absentDays: 0
+      workDays: 0,
+      presentDays: 0,
+      lateDays: 0,
+      earlyDays: 0,
+      absentDays: 0
     },
     config: {
-      workStartTime: '09:00', workEndTime: '18:00',
+      workStartTime: '09:00',
+      workEndTime: '18:00',
       location: { name: '重庆西永考勤点', radius: 300 }
     },
     showEditModal: false,
@@ -57,40 +62,14 @@ Page({
       const now = new Date();
       const year = now.getFullYear();
       const month = now.getMonth() + 1;
-      const records = await CheckinService.getMonthRecords(year, month) || [];
+      const stats = await CheckinService.getStatistics(year, month);
       if (this._isUnloaded) return;
-
-      let presentDays = 0;
-      if (Array.isArray(records)) {
-        records.forEach(record => {
-          if (!record) return;
-          if (record.clockIn || record.clockOut || record.checkInTime || record.checkOutTime) {
-            presentDays++;
-          }
-        });
-      }
-      const workDays = this.getWorkDaysInMonth(year, month);
-      const absentDays = Math.max(0, workDays - presentDays);
-      this.setData({ attendanceInfo: { workDays, presentDays, absentDays } });
+      this.setData({ attendanceInfo: stats });
     } catch (e) {
       if (!this._isUnloaded) {
         console.error('加载考勤统计失败:', e);
-        this.setData({
-          'attendanceInfo.workDays': this.getWorkDaysInMonth(new Date().getFullYear(), new Date().getMonth() + 1)
-        });
       }
     }
-  },
-
-  getWorkDaysInMonth(year, month) {
-    const firstDay = new Date(year, month - 1, 1);
-    const lastDay = new Date(year, month, 0);
-    let workDays = 0;
-    for (let d = new Date(firstDay); d <= lastDay; d.setDate(d.getDate() + 1)) {
-      const day = d.getDay();
-      if (day !== 0 && day !== 6) workDays++;
-    }
-    return workDays;
   },
 
   async loadConfig() {
@@ -100,7 +79,7 @@ Page({
       // 修复：不再强制覆盖坐标，完全信任服务端设置
       this.setData({ config: config || this.data.config });
     } catch (e) {
-      if (!this._isUnloaded) console.log('加载配置失败', e);
+      if (!this._isUnloaded) console.error('加载配置失败');
     }
   },
 
@@ -112,16 +91,22 @@ Page({
       this.loadAttendanceInfo();
       app.showSuccess('登录成功');
     } catch (e) {
-      if (!this._isUnloaded) console.log('登录失败', e);
+      if (!this._isUnloaded) console.error('登录失败');
     }
   },
 
   onEditProfile() {
-    if (!this.data.isLogin) { app.showError('请先登录'); return; }
+    if (!this.data.isLogin) {
+      app.showError('请先登录');
+      return;
+    }
     const { userInfo } = this.data;
     this.setData({
       showEditModal: true,
-      editForm: { name: userInfo ? (userInfo.name || '') : '', phone: userInfo ? (userInfo.phone || '') : '' }
+      editForm: {
+        name: userInfo ? userInfo.name || '' : '',
+        phone: userInfo ? userInfo.phone || '' : ''
+      }
     });
   },
 
@@ -129,16 +114,31 @@ Page({
     this.setData({ showEditModal: false, editForm: { name: '', phone: '' } });
   },
 
-  onNameInput(e) { this.setData({ 'editForm.name': e.detail.value }); },
-  onPhoneInput(e) { this.setData({ 'editForm.phone': e.detail.value }); },
+  onNameInput(e) {
+    this.setData({ 'editForm.name': e.detail.value });
+  },
+  onPhoneInput(e) {
+    this.setData({ 'editForm.phone': e.detail.value });
+  },
 
   async onSaveProfile() {
     const { editForm } = this.data;
-    if (!editForm.name.trim()) { app.showError('请输入姓名'); return; }
-    if (editForm.phone && !/^1\d{10}$/.test(editForm.phone)) { app.showError('请输入正确的手机号'); return; }
+    if (!editForm.name.trim()) {
+      app.showError('请输入姓名');
+      return;
+    }
+    // 有意使用宽松的中国大陆 11 位手机号格式校验。
+    if (editForm.phone && !/^1\d{10}$/.test(editForm.phone)) {
+      app.showError('请输入正确的手机号');
+      return;
+    }
     try {
       wx.showLoading({ title: '保存中...' });
-      const userInfo = { ...this.data.userInfo, name: editForm.name.trim(), phone: editForm.phone.trim() };
+      const userInfo = {
+        ...this.data.userInfo,
+        name: editForm.name.trim(),
+        phone: editForm.phone.trim()
+      };
       await app.updateUserInfo(userInfo);
       wx.hideLoading();
       if (this._isUnloaded) return;
@@ -151,8 +151,12 @@ Page({
     }
   },
 
-  onCheckInRule() { this.setData({ showRuleModal: true }); },
-  onCloseRuleModal() { this.setData({ showRuleModal: false }); },
+  onCheckInRule() {
+    this.setData({ showRuleModal: true });
+  },
+  onCloseRuleModal() {
+    this.setData({ showRuleModal: false });
+  },
 
   onLocationSet() {
     if (!this.data.isAdmin) return;
@@ -191,8 +195,16 @@ Page({
           app.globalData.isAdmin = false;
           if (this._isUnloaded) return;
           this.setData({
-            isLogin: false, userInfo: null, isAdmin: false,
-            attendanceInfo: { workDays: 0, presentDays: 0, lateDays: 0, earlyDays: 0, absentDays: 0 }
+            isLogin: false,
+            userInfo: null,
+            isAdmin: false,
+            attendanceInfo: {
+              workDays: 0,
+              presentDays: 0,
+              lateDays: 0,
+              earlyDays: 0,
+              absentDays: 0
+            }
           });
           app.showSuccess('已退出登录');
         }

@@ -1,7 +1,7 @@
 const app = getApp();
-const DbService = require('../../services/DbService');
 const CheckinService = require('../../services/CheckinService');
-
+const RecordModel = require('../../services/RecordModel');
+const CloudService = require('../../services/CloudService');
 Page({
   data: {
     user: null,
@@ -11,238 +11,128 @@ Page({
     calendarGrid: [],
     records: [],
     weekStats: [],
-    weekTotalMinutes: 0,
+    weekTotalText: '0h0m',
     chartMax: 1,
-    stats: {
-      totalDays: 0,
-      presentDays: 0,
-      lateDays: 0,
-      earlyDays: 0,
-      absentDays: 0,
-      workDays: 0
-    },
+    stats: {},
     loading: false,
     showRecordDetail: false,
     selectedRecord: null
   },
-
   onLoad(options) {
-    const { openid, name } = options;
-    const now = new Date();
-    
+    const today = RecordModel.dateStr();
     this.setData({
-      user: { openid, name },
-      year: now.getFullYear(),
-      month: now.getMonth() + 1
+      user: { openid: options.openid, name: options.name },
+      year: Number(today.slice(0, 4)),
+      month: Number(today.slice(5, 7))
     });
-
     wx.setNavigationBarTitle({
-      title: name ? `${name}的打卡记录` : '打卡记录'
+      title: options.name ? `${options.name}的打卡记录` : '打卡记录'
     });
-
     this.loadData();
   },
-
   async loadData() {
-    this.setData({ loading: true });
-    
+    const token = (this._loadToken = (this._loadToken || 0) + 1);
+    this.setData({ loading: true, showRecordDetail: false });
     try {
       const { year, month, user } = this.data;
-      
-      // 加载月度记录
-      const records = (await CheckinService.getMonthRecords(year, month, user.openid))
-        .map(record => this.normalizeRecord(record));
-      
-      // 计算统计数据
-      const stats = await CheckinService.getStatistics(year, month, user.openid);
-      const weekStats = this.buildWeekStats(records);
-      
-      // 生成日历
-      const calendarGrid = this.generateCalendar(year, month, records);
-      
+      if (!user.openid) throw new Error('成员标识无效');
+      const records = await CheckinService.getMonthRecords(year, month, user.openid);
+      const stats = await CheckinService.getStatistics(year, month, user.openid, records);
+      // 七天图表跨月也必须补查，不能只用所选月份的数据。
+      const today = RecordModel.dateStr();
+      const since = new Date(`${today}T00:00:00Z`);
+      since.setUTCDate(since.getUTCDate() - 6);
+      const recent = RecordModel.normalizeList(
+        await CloudService.list('listAllRecords', {
+          openid: user.openid,
+          startDate: since.toISOString().slice(0, 10),
+          endDate: today
+        })
+      );
+      const weekStats = this.buildWeekStats(recent);
+      if (token !== this._loadToken) return;
       this.setData({
         records: records.sort((a, b) => b.date.localeCompare(a.date)),
         stats,
-        calendarGrid,
+        calendarGrid: this.generateCalendar(year, month, records),
         weekStats,
-        weekTotalMinutes: weekStats.reduce((sum, item) => sum + (item.minutes || 0), 0),
-        chartMax: Math.max(1, ...weekStats.map(item => item.count || 0)),
+        weekTotalText: RecordModel.durationText(weekStats.reduce((sum, r) => sum + r.minutes, 0)),
         loading: false
       });
     } catch (e) {
-      console.error('加载数据失败', e);
-      this.setData({ loading: false });
-      wx.showToast({ title: '加载失败', icon: 'none' });
+      if (token === this._loadToken) {
+        this.setData({
+          loading: false,
+          records: [],
+          calendarGrid: [],
+          stats: {}
+        });
+        app.showError(e.message);
+      }
     }
   },
-
   buildWeekStats(records) {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const recordMap = {};
-
-    records.forEach(record => {
-      if (!record.date) return;
-      recordMap[record.date] = record;
-    });
-
-    const result = [];
-    const maxDayCount = 7;
-    let chartMax = 1;
-
-    for (let i = maxDayCount - 1; i >= 0; i--) {
+    const today = new Date(`${RecordModel.dateStr()}T00:00:00Z`),
+      result = [];
+    for (let i = 6; i >= 0; i--) {
       const date = new Date(today);
-      date.setDate(today.getDate() - i);
-      const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-      const record = recordMap[key] || {};
-      const count = ((record.clockIn ? 1 : 0) + (record.clockOut ? 1 : 0));
-      const minutes = Number(record.duration || 0);
+      date.setUTCDate(date.getUTCDate() - i);
+      const key = date.toISOString().slice(0, 10),
+        daily = records.filter((r) => r.date === key);
       result.push({
         key,
-        label: `${date.getMonth() + 1}/${date.getDate()}`,
-        count,
-        minutes,
-        barHeight: 0
+        label: `${date.getUTCMonth() + 1}/${date.getUTCDate()}`,
+        count: daily.reduce((sum, r) => sum + (r.checkInTime ? 1 : 0) + (r.completed ? 1 : 0), 0),
+        minutes: daily.reduce((sum, r) => sum + r.durationMinutes, 0)
       });
-      if (count > chartMax) chartMax = count;
     }
-
-    result.forEach(item => {
-      item.barHeight = item.count === 0 ? 6 : Math.max(18, (item.count / chartMax) * 100);
-    });
-
-    return result;
+    const max = Math.max(1, ...result.map((r) => r.count));
+    return result.map((r) => ({
+      ...r,
+      barHeight: r.count ? Math.max(18, (r.count / max) * 100) : 6
+    }));
   },
-
   generateCalendar(year, month, records) {
-    const daysInMonth = new Date(year, month, 0).getDate();
-    const startWeekDay = new Date(year, month - 1, 1).getDay();
-    const recordMap = {};
-    
-    records.forEach(r => {
-      recordMap[r.date] = r;
-    });
-
     const grid = [];
-    
-    // 填充空白
-    for (let i = 0; i < startWeekDay; i++) {
+    for (let i = 0; i < new Date(year, month - 1, 1).getDay(); i++)
       grid.push({ day: '', status: '' });
+    for (let day = 1; day <= new Date(year, month, 0).getDate(); day++) {
+      const date = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+      grid.push({
+        day,
+        date,
+        status: RecordModel.calendarStatus(records, date)
+      });
     }
-    
-    // 填充日期
-    for (let d = 1; d <= daysInMonth; d++) {
-      const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-      const record = recordMap[dateStr];
-      let status = '';
-      
-      if (record && (record.clockIn || record.clockOut || record.checkInTime || record.checkOutTime)) {
-        status = 'normal';
-      }
-      
-      grid.push({ day: d, date: dateStr, status });
-    }
-    
     return grid;
   },
-
-  normalizeRecord(record) {
-    const duration = record.duration || (
-      record.checkInTimestamp && record.checkOutTimestamp
-        ? Math.round((record.checkOutTimestamp - record.checkInTimestamp) / 60000)
-        : 0
-    );
-    return {
-      ...record,
-      clockIn: record.clockIn || record.checkInTime || '',
-      clockOut: record.clockOut || record.checkOutTime || '',
-      duration,
-      locationIn: record.locationIn || record.checkInLocation || null,
-      locationOut: record.locationOut || record.checkOutLocation || null,
-      status: record.status === 'Incomplete' || record.status === 'Complete'
-        ? 'normal'
-        : record.status
-    };
-  },
-
   prevMonth() {
     let { year, month } = this.data;
     if (month === 1) {
       year--;
       month = 12;
-    } else {
-      month--;
-    }
+    } else month--;
     this.setData({ year, month }, () => this.loadData());
   },
-
   nextMonth() {
     let { year, month } = this.data;
     if (month === 12) {
       year++;
       month = 1;
-    } else {
-      month++;
-    }
+    } else month++;
     this.setData({ year, month }, () => this.loadData());
   },
-
   onDateTap(e) {
-    const { date } = e.currentTarget.dataset;
-    if (!date) return;
-    
-    const record = this.data.records.find(r => r.date === date);
-    if (record) {
-      this.setData({
-        selectedRecord: record,
-        showRecordDetail: true
-      });
-    }
+    const records = this.data.records.filter((r) => r.date === e.currentTarget.dataset.date);
+    if (records.length) this.setData({ selectedRecord: records[0], showRecordDetail: true });
   },
-
   onRecordItemTap(e) {
-    const { record } = e.currentTarget.dataset;
     this.setData({
-      selectedRecord: record,
+      selectedRecord: e.currentTarget.dataset.record,
       showRecordDetail: true
     });
   },
-
   closeDetail() {
     this.setData({ showRecordDetail: false, selectedRecord: null });
-  },
-
-  formatDuration(minutes) {
-    if (!minutes) return '--';
-    const hours = Math.floor(minutes / 60);
-    const mins = minutes % 60;
-    if (hours > 0) {
-      return `${hours}小时${mins > 0 ? mins + '分钟' : ''}`;
-    }
-    return `${mins}分钟`;
-  },
-
-  formatWeekTotal(minutes) {
-    if (!minutes) return '0分钟';
-    const hours = Math.floor(minutes / 60);
-    const mins = minutes % 60;
-    if (hours > 0) {
-      return `${hours}小时${mins > 0 ? mins + '分钟' : ''}`;
-    }
-    return `${mins}分钟`;
-  },
-
-  getStatusText(status) {
-    if (status === 'normal') {
-      return '已打卡';
-    }
-    return '未知';
-  },
-
-  getStatusClass(status) {
-    if (status === 'normal') {
-      return 'status-normal';
-    }
-    return '';
   }
 });
