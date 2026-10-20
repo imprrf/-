@@ -1,18 +1,35 @@
 const { hash, role, clean, optional, userFor, initializeRoles } = require('./db');
 async function login(db, openid, now) {
   await initializeRoles(db);
+  // 事务外快速检查,优化已存在用户的性能
   const previous = await userFor(db, openid);
-  const id = previous ? previous._id : `user_${hash(openid)}`;
   const user = await db.runTransaction(async (tx) => {
     const stateRef = tx.collection('security_state').doc('roles');
     const state = await optional(stateRef);
     if (!state) throw new Error('角色状态未初始化');
-    const ref = tx.collection('users').doc(id);
-    const existing = await optional(ref);
-    if (existing) {
-      await ref.update({ data: { lastLoginTime: now } });
+    // 🔥 关键修复: 事务内重新检查该 openid 的用户,防止并发创建重复身份
+    const existingUsers = await tx.collection('users').where({ _openid: openid }).limit(2).get();
+    // 检测数据异常 (不应该有重复的 openid)
+    if (existingUsers.data.length > 1) {
+      throw new Error('用户身份记录重复，请管理员先处理');
+    }
+    // 用户已存在 - 只更新登录时间
+    if (existingUsers.data.length === 1) {
+      const existing = existingUsers.data[0];
+      await tx.collection('users').doc(existing._id).update({ data: { lastLoginTime: now } });
       return { ...existing, lastLoginTime: now };
     }
+    // 用户不存在 - 创建新用户
+    // 继续使用确定性 ID (利用数据库唯一性约束作为额外保护)
+    const id = previous ? previous._id : `user_${hash(openid)}`;
+    const ref = tx.collection('users').doc(id);
+    // 防御性检查: 确保 doc ID 未被占用 (理论上不应该发生)
+    const byId = await optional(ref);
+    if (byId) {
+      // ID 冲突但 openid 查询未发现 - 数据异常或严重并发冲突
+      throw new Error('用户 ID 冲突，请联系管理员');
+    }
+    // 创建新用户 (逻辑保持不变)
     const isFirst = state.registeredCount === 0;
     const data = {
       _openid: openid,

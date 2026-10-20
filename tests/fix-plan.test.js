@@ -77,16 +77,46 @@ test('openid 云端与本地映射一致；本地 upsert 不重复 ID', async ()
     false
   );
 });
-test('并发注册只生成一个首管理员，同一人注册不会重复', async () => {
+test('并发注册只生成一个首管理员，同一人重复注册不会重复', async () => {
   const db = new MemoryDatabase();
   const results = await Promise.all([
     core.login(db, 'first', now),
     core.login(db, 'second', now),
     core.login(db, 'first', now)
   ]);
-  assert.equal(db.table('users').size, 2);
-  assert.equal([...db.table('users').values()].filter((u) => u.role === 'admin').length, 1);
+  // 验证总用户数 (只有两个不同的用户)
+  assert.equal(db.table('users').size, 2, '应该只有两个不同的用户');
+  // 验证首管理员唯一
+  const admins = [...db.table('users').values()].filter((u) => u.role === 'admin');
+  assert.equal(admins.length, 1, '只应该有一个首管理员');
+  // 验证第一个用户是管理员
   assert.equal(results[0].user.role, 'admin');
+  // 验证第1次和第3次登录返回的是同一用户 (防止同一人重复创建)
+  assert.equal(results[0].user._id, results[2].user._id, '同一人多次登录应返回相同 ID');
+});
+test('同一用户高并发重复登录不会产生重复身份', async () => {
+  const db = new MemoryDatabase();
+  const openid = 'concurrent-user';
+  // 模拟 5 次并发登录 (网络重试、多设备、快速重复点击等场景)
+  const results = await Promise.all([
+    core.login(db, openid, now),
+    core.login(db, openid, now),
+    core.login(db, openid, now),
+    core.login(db, openid, now),
+    core.login(db, openid, now)
+  ]);
+  // 验证: 只创建了一个用户
+  const users = [...db.table('users').values()].filter((u) => u._openid === openid);
+  assert.equal(users.length, 1, '同一 openid 不应创建多个用户');
+  // 验证: 所有登录请求都成功
+  assert.equal(
+    results.filter((r) => r.success).length,
+    5,
+    '所有并发登录请求都应该成功'
+  );
+  // 验证: 所有返回的 user._id 相同
+  const userIds = results.map((r) => r.user._id);
+  assert.equal(new Set(userIds).size, 1, '所有登录应返回同一用户 ID');
 });
 test('资料保存剥离角色、身份与保留字段，返回服务端角色', async () => {
   const db = await fixture();
