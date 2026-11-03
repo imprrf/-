@@ -56,7 +56,7 @@ AI 未直接操作云端；用户已开始部署，并确认 updateUserInfo 更�
 
 此命令更新既有 updateUserInfo 的整个代码目录，不新建同名函数；其 wx-server-sdk 依赖版本未变。用户已开启服务端口并成功执行增量更新。长命令可改为短变量，但必须显式传 --project：仅切换当前目录不够，完整短命令见 SESSION_PROGRESS.md。若后续失败，先核对错误和函数状态，不删除现有函数。
 
-## v1.0.3 部署（导出记录与移除成员）
+## v2.1.0 部署（导出记录与移除成员）
 
 回退基线：标签 `backup-before-export-delete`，开发分支 `feature/export-and-remove-member`。
 
