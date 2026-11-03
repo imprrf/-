@@ -61,7 +61,7 @@ AI 未直接操作云端；用户已开始部署，并确认 updateUserInfo 更�
 回退基线：标签 `backup-before-export-delete`，开发分支 `feature/export-and-remove-member`。
 
 1. 执行 `npm run sync:cloud`、`npm run check`、`npm test`。
-2. 重新部署 `adminOps`，选择“云端安装依赖”（新增 `exceljs`、`docx`，首次安装较慢，必要时调大云函数超时和内存）。
+2. 重新部署 `adminOps`，选择“云端安装依赖”（新增 `exceljs`、`docx`，首次安装较慢）。**云函数超时和内存必须在云开发控制台手动设置**：实测 `config.json` 里的 `timeout`、`memorySize` 不生效，默认 3s/256M 会导致导出报“网络或云服务调用失败”。导出验证通过时设置为 60s、512M，部署后在控制台核对。
 3. 重新部署 `login`、`checkin`、`updateUserInfo`，使其拒绝已移除用户。
 4. 云存储会生成 `exports/` 目录保存导出文件，导出链接为临时链接。需要时可在云控制台定期清理该目录。
 5. 导出文件生成依赖云端依赖，本地测试覆盖不到，必须用真机验证：分别导出 Excel 和 Word，范围覆盖全部、近一周、近一个月，确认能打开且内容正确。
