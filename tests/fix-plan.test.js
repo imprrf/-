@@ -563,3 +563,39 @@ test('导出整理：范围起点、已移除成员标注、未来记录忽略�
   assert.equal(summary.totalMinutes, 60);
   assert.equal(summary.outOfRangeDays, 1);
 });
+test('导出兼容 type=in/out 旧事件：按成员和日期配对，孤立事件保留', () => {
+  const exporter = require('../cloudfunctions/_shared/export');
+  const users = [
+    { _openid: 'alice', name: 'Alice' },
+    { _openid: 'bob', name: 'Bob' }
+  ];
+  const records = [
+    { _openid: 'alice', date: '2026-10-12', type: 'in', time: '09:00', timestamp: 1000 },
+    { _openid: 'bob', date: '2026-10-12', type: 'in', time: '10:00', timestamp: 2000 },
+    { _openid: 'alice', date: '2026-10-12', type: 'out', time: '11:00', timestamp: 7201000 },
+    { _openid: 'bob', date: '2026-10-12', type: 'out', time: '12:00', timestamp: 7202000 },
+    { _openid: 'alice', date: '2026-10-11', type: 'in', time: '08:00', timestamp: 500 },
+    { _openid: 'bob', date: '2026-10-10', type: 'out', time: '18:00', timestamp: 900 }
+  ];
+  const rows = exporter.buildRows(records, users, '2026-10-12');
+  assert.equal(rows.length, 4);
+  const find = (name, date) => rows.find((r) => r.name === name && r.date === date);
+  const alice = find('Alice', '2026-10-12');
+  assert.equal(alice.checkInTime, '09:00');
+  assert.equal(alice.checkOutTime, '11:00');
+  assert.equal(alice.minutes, 120);
+  assert.equal(alice.status, '已离开');
+  const bob = find('Bob', '2026-10-12');
+  assert.equal(bob.checkInTime, '10:00');
+  assert.equal(bob.checkOutTime, '12:00');
+  assert.equal(bob.minutes, 120);
+  const lonelyIn = find('Alice', '2026-10-11');
+  assert.equal(lonelyIn.checkInTime, '08:00');
+  assert.equal(lonelyIn.checkOutTime, '');
+  assert.equal(lonelyIn.minutes, 0);
+  assert.equal(lonelyIn.status, '未记录离开');
+  const lonelyOut = find('Bob', '2026-10-10');
+  assert.equal(lonelyOut.checkInTime, '');
+  assert.equal(lonelyOut.checkOutTime, '18:00');
+  assert.equal(lonelyOut.status, '已离开');
+});

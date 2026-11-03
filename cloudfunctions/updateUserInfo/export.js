@@ -20,7 +20,56 @@ function rangeStart(range, now) {
   const days = RANGES[range];
   return days ? dateParts(now - (days - 1) * 86400000).date : '';
 }
-function buildRows(records, users, today) {
+// 旧事件（type=in/out，且没有 checkInTime/clockIn）：规则与前端 RecordModel.normalizeList 一致，
+// 按成员和日期配对；孤立的签到或签退也保留为一行。
+const isLegacyEvent = (r) => (r.type === 'in' || r.type === 'out') && !r.checkInTime && !r.clockIn;
+const legacyIn = (r) => ({ ...r, checkInTime: r.time, checkInTimestamp: r.timestamp });
+function pairLegacyEvents(records) {
+  const sorted = records
+    .slice()
+    .sort(
+      (a, b) => (a.timestamp || a.checkInTimestamp || 0) - (b.timestamp || b.checkInTimestamp || 0)
+    );
+  const result = [];
+  const pendingByOwnerDate = new Map();
+  for (const record of sorted) {
+    if (!isLegacyEvent(record)) {
+      result.push(record);
+      continue;
+    }
+    const key = `${record._openid || ''}:${record.date}`;
+    const pending = pendingByOwnerDate.get(key);
+    if (record.type === 'in') {
+      if (pending) result.push(legacyIn(pending));
+      pendingByOwnerDate.set(key, record);
+    } else if (pending) {
+      result.push({
+        ...legacyIn(pending),
+        checkOutTime: record.time,
+        checkOutTimestamp: record.timestamp,
+        status: 'Complete'
+      });
+      pendingByOwnerDate.delete(key);
+    } else {
+      result.push({
+        ...record,
+        checkOutTime: record.time,
+        checkOutTimestamp: record.timestamp,
+        status: 'Complete'
+      });
+    }
+  }
+  for (const pending of pendingByOwnerDate.values()) result.push(legacyIn(pending));
+  return result;
+}
+function durationOf(r) {
+  if (r.durationMinutes !== undefined) return Number(r.durationMinutes) || 0;
+  const start = r.checkInTimestamp || r.clockInTimestamp || 0;
+  const end = r.checkOutTimestamp || r.clockOutTimestamp || 0;
+  return start && end ? Math.max(0, Math.floor((end - start) / 60000)) : 0;
+}
+function buildRows(rawRecords, users, today) {
+  const records = pairLegacyEvents(rawRecords);
   const byOpenid = new Map(users.map((u) => [u._openid, u]));
   return records
     .filter((r) => r.date && r.date <= today)
@@ -37,7 +86,7 @@ function buildRows(records, users, today) {
         date: r.date,
         checkInTime: r.checkInTime || r.clockIn || '',
         checkOutTime: completed ? r.checkOutTime || r.clockOut || '' : '',
-        minutes: completed ? Number(r.durationMinutes) || 0 : 0,
+        minutes: completed ? durationOf(r) : 0,
         completed,
         status: completed ? '已离开' : expired ? '未记录离开' : '在工作室',
         outOfRange: !!(r.outOfRange || r.checkInOutOfRange || r.checkOutOutOfRange),
