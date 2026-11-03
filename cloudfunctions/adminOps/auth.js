@@ -1,4 +1,4 @@
-const { hash, role, clean, optional, userFor, initializeRoles } = require('./db');
+const { hash, role, clean, optional, userFor, assertActive, initializeRoles } = require('./db');
 async function login(db, openid, now) {
   await initializeRoles(db);
   // 事务外快速检查,优化已存在用户的性能
@@ -16,6 +16,7 @@ async function login(db, openid, now) {
     // 用户已存在 - 只更新登录时间
     if (existingUsers.data.length === 1) {
       const existing = existingUsers.data[0];
+      assertActive(existing);
       await tx.collection('users').doc(existing._id).update({ data: { lastLoginTime: now } });
       return { ...existing, lastLoginTime: now };
     }
@@ -71,6 +72,7 @@ function profileFields(input) {
 async function updateProfile(db, openid, event, now) {
   const user = await userFor(db, openid);
   if (!user) throw new Error('请先登录');
+  assertActive(user);
   const data = profileFields(event.profile || {});
   // 返回更新后重新读取的权威角色，不能把客户端角色回写到缓存。
   await db

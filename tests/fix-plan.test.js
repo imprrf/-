@@ -443,3 +443,73 @@ test('前端网络失败保留请求 ID，再次点击复用且成功后清理',
   assert.equal(storage.get('pending_checkin_alice'), undefined);
   assert.equal(page.data.canClock, true);
 });
+test('普通成员不能移除成员', async () => {
+  const db = await fixture();
+  await assert.rejects(
+    core.adminOps(db, 'bob', { action: 'removeMember', openid: 'alice' }, now),
+    /无管理员权限/
+  );
+  assert.equal(db.table('users').get('alice').removed, undefined);
+});
+test('移除成员为软删除：保留用户与历史记录，写审计日志，列表不再显示', async () => {
+  const db = await fixture();
+  await core.checkin(db, 'bob', { requestId: 'request_0001' }, now);
+  await core.adminOps(db, 'alice', { action: 'removeMember', openid: 'bob' }, now + 1000);
+  const bob = db.table('users').get('bob');
+  assert.equal(bob.removed, true);
+  assert.equal(bob.removedBy, 'alice');
+  assert.equal(bob.removedAt, now + 1000);
+  assert.equal(db.table('records').size, 1);
+  const log = [...db.table('roleLogs').values()].find((l) => l.action === 'remove_member');
+  assert.equal(log.actorOpenid, 'alice');
+  assert.equal(log.targetOpenid, 'bob');
+  const users = await core.adminOps(db, 'alice', { action: 'listUsers' }, now);
+  assert.equal(users.items.some((u) => u.openid === 'bob'), false);
+  const records = await core.adminOps(
+    db,
+    'alice',
+    { action: 'listAllRecords', openid: 'bob' },
+    now
+  );
+  assert.equal(records.items.length, 1);
+});
+test('已移除成员无法登录、打卡、改资料，也不能再被设置角色', async () => {
+  const db = await fixture();
+  await core.adminOps(db, 'alice', { action: 'removeMember', openid: 'bob' }, now);
+  await assert.rejects(core.login(db, 'bob', now), /已退出工作室/);
+  await assert.rejects(
+    core.checkin(db, 'bob', { requestId: 'request_0001' }, now),
+    /已退出工作室/
+  );
+  await assert.rejects(
+    core.updateProfile(db, 'bob', { profile: { name: 'New Bob' } }, now),
+    /已退出工作室/
+  );
+  await assert.rejects(
+    core.adminOps(db, 'alice', { action: 'setRole', openid: 'bob', role: 'admin' }, now),
+    /成员不存在/
+  );
+  assert.equal(db.table('records').size, 0);
+  assert.equal(db.table('users').get('bob').name, 'Bob');
+});
+test('不能移除自己、管理员或不存在的成员', async () => {
+  const db = await fixture();
+  await assert.rejects(
+    core.adminOps(db, 'alice', { action: 'removeMember', openid: 'alice' }, now),
+    /不能移除自己/
+  );
+  await core.adminOps(db, 'alice', { action: 'setRole', openid: 'bob', role: 'admin' }, now);
+  await assert.rejects(
+    core.adminOps(db, 'alice', { action: 'removeMember', openid: 'bob' }, now + 1),
+    /先取消/
+  );
+  await assert.rejects(
+    core.adminOps(db, 'alice', { action: 'removeMember', openid: 'nobody' }, now + 1),
+    /成员不存在/
+  );
+  await assert.rejects(
+    core.adminOps(db, 'alice', { action: 'removeMember' }, now + 1),
+    /成员标识无效/
+  );
+  assert.equal(db.table('users').get('bob').removed, undefined);
+});

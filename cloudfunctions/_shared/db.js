@@ -39,6 +39,9 @@ async function userFor(db, openid) {
   if (result.data.length > 1) throw new Error('用户身份记录重复，请管理员先处理');
   return result.data[0] || null;
 }
+function assertActive(user) {
+  if (user && user.removed === true) throw new Error('该账号已退出工作室，无法使用');
+}
 async function requireAdmin(db, openid) {
   const user = await userFor(db, openid);
   if (role(user) !== 'admin') throw new Error('无管理员权限');
@@ -62,4 +65,14 @@ async function initializeRoles(db) {
   }
 }
 
-module.exports = { hash, role, clean, optional, all, userFor, requireAdmin, initializeRoles };
+module.exports = {
+  hash,
+  role,
+  clean,
+  optional,
+  all,
+  userFor,
+  assertActive,
+  requireAdmin,
+  initializeRoles
+};

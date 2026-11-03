@@ -87,7 +87,10 @@ async function adminOps(db, openid, event, now) {
       .get();
     return {
       success: true,
-      items: collection === 'users' ? response.data.map(clean) : response.data,
+      items:
+        collection === 'users'
+          ? response.data.filter((u) => u.removed !== true).map(clean)
+          : response.data,
       hasMore: response.data.length === limit
     };
   }
@@ -108,6 +111,42 @@ async function adminOps(db, openid, event, now) {
       config: await optional(db.collection('config').doc('main_config'))
     };
   }
+  if (event.action === 'removeMember') {
+    if (typeof event.openid !== 'string' || !event.openid) throw new Error('成员标识无效');
+    if (event.openid === openid) throw new Error('不能移除自己');
+    const target = await userFor(db, event.openid);
+    if (!target || target.removed === true) throw new Error('成员不存在');
+    if (role(target) === 'admin') throw new Error('请先取消该成员的管理员权限再移除');
+    await db.runTransaction(async (tx) => {
+      const actorNow = await optional(tx.collection('users').doc(actor._id));
+      if (role(actorNow) !== 'admin') throw new Error('无管理员权限');
+      const ref = tx.collection('users').doc(target._id);
+      const targetNow = await optional(ref);
+      if (!targetNow || targetNow.removed === true) throw new Error('成员不存在');
+      if (role(targetNow) === 'admin') throw new Error('请先取消该成员的管理员权限再移除');
+      // 软删除：保留用户文档和全部历史打卡记录，只标记为已移除。
+      await ref.update({
+        data: { removed: true, removedAt: now, removedBy: openid, updatedAt: now }
+      });
+      const logId = hash(`${openid}:${target._id}:${now}:remove`);
+      await tx
+        .collection('roleLogs')
+        .doc(logId)
+        .set({
+          data: {
+            actorOpenid: openid,
+            actorName: actorNow.name || '',
+            targetOpenid: event.openid,
+            targetName: targetNow.name || '',
+            oldRole: role(targetNow),
+            newRole: role(targetNow),
+            action: 'remove_member',
+            createdAt: now
+          }
+        });
+    });
+    return { success: true };
+  }
   if (event.action !== 'setRole') throw new Error('未知管理操作');
   if (!['admin', 'member'].includes(event.role) || typeof event.openid !== 'string')
     throw new Error('角色参数无效');
@@ -115,7 +154,7 @@ async function adminOps(db, openid, event, now) {
     throw new Error('不能撤销自己的管理员权限');
   await initializeRoles(db);
   const target = await userFor(db, event.openid);
-  if (!target) throw new Error('成员不存在');
+  if (!target || target.removed === true) throw new Error('成员不存在');
   await db.runTransaction(async (tx) => {
     const stateRef = tx.collection('security_state').doc('roles');
     const state = await optional(stateRef);
