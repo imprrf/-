@@ -5,7 +5,7 @@
 
 const CloudService = require('./services/CloudService');
 const ConfigService = require('./services/ConfigService');
-const APP_VERSION = '1.0.2';
+const APP_VERSION = '1.0.3';
 
 App({
   normalizeUserRecord(user = {}) {

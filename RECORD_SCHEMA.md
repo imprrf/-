@@ -23,6 +23,18 @@
 | `userName` / `userPhone` | string | 打卡时服务端读取用户资料快照 |
 | `createTime` / `updateTime` | number | 服务端毫秒时间戳 |
 
+## 成员移除字段（users 集合）
+
+成员被管理员移除时只做软删除，用户文档和该成员的全部历史打卡记录都保留。
+
+| 字段 | 类型 | 约定 |
+|---|---|---|
+| `removed` | boolean | `true` 表示已移除；未移除的用户没有此字段 |
+| `removedAt` | number | 移除时的服务端毫秒时间戳 |
+| `removedBy` | string | 执行移除的管理员 openid |
+
+移除操作写入 `roleLogs`（`action: 'remove_member'`）。移除不改变 `security_state.registeredCount`，因为用户文档仍保留。导出时已移除成员的姓名带“（已移除）”后缀。
+
 同日支持多组进出。事务锁定 `checkin_state` 中该用户当天的状态；签到新建一条，签退更新挂起的一条。不同请求在 5 秒内返回上次结果，防止并发签到变成签退。`checkin_requests` 保存请求收据，客户端网络失败后复用请求 ID，跨页面、重启或跨日重试也返回原操作结果。上述两个集合只允许云函数访问。
 
 历史未签退记录在统一读取层按日期判断为“未签退”，不批量改写原始历史记录。旧格式甲和 type=in/out 事件由 `RecordModel` 集中做只读适配；按用户和日期配对，避免混入其他成员的记录。部署后先执行管理员 `auditRecordSchemas` 盘点，迁移方案须依据实际数量决定。
