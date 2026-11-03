@@ -18,7 +18,14 @@
   "compileType": "miniprogram",
   "simulatorPluginLibVersion": {},
   "packOptions": {
-    "ignore": [],
+    "ignore": [
+      { "type": "folder", "value": ".claude" },
+      { "type": "folder", "value": "tasks" },
+      { "type": "folder", "value": "tests" },
+      { "type": "folder", "value": "scripts" },
+      { "type": "glob", "value": "**/*.md" },
+      { "type": "file", "value": "database.rules.json" }
+    ],
     "include": []
   },
   "appid": "wx364bdabb033cfdbe",
