@@ -513,3 +513,53 @@ test('不能移除自己、管理员或不存在的成员', async () => {
   );
   assert.equal(db.table('users').get('bob').removed, undefined);
 });
+test('导出仅管理员可用，范围、格式无效或无记录时拒绝', async () => {
+  const db = await fixture();
+  await assert.rejects(
+    core.adminOps(db, 'bob', { action: 'exportRecords' }, now),
+    /无管理员权限/
+  );
+  await assert.rejects(
+    core.adminOps(db, 'alice', { action: 'exportRecords', range: 'year' }, now),
+    /导出范围无效/
+  );
+  await assert.rejects(
+    core.adminOps(db, 'alice', { action: 'exportRecords', format: 'pdf' }, now),
+    /导出格式无效/
+  );
+  await assert.rejects(
+    core.adminOps(db, 'alice', { action: 'exportRecords', range: 'all' }, now),
+    /没有打卡记录/
+  );
+});
+test('导出整理：范围起点、已移除成员标注、未来记录忽略、汇总口径一致', () => {
+  const exporter = require('../cloudfunctions/_shared/export');
+  assert.equal(exporter.rangeStart('all', now), '');
+  assert.equal(exporter.rangeStart('week', now), '2026-10-06');
+  assert.equal(exporter.rangeStart('month', now), '2026-09-13');
+  const users = [{ _openid: 'bob', name: 'Bob', phone: '13800138000', removed: true }];
+  const records = [
+    {
+      _openid: 'bob',
+      date: '2026-10-12',
+      checkInTime: '09:00',
+      checkOutTime: '10:00',
+      checkOutTimestamp: 1,
+      status: 'Complete',
+      durationMinutes: 60,
+      outOfRange: true
+    },
+    { _openid: 'bob', date: '2026-10-12', checkInTime: '11:00', status: 'Incomplete' },
+    { _openid: 'bob', date: '2026-10-13', checkInTime: '09:00', status: 'Incomplete' }
+  ];
+  const rows = exporter.buildRows(records, users, '2026-10-12');
+  assert.equal(rows.length, 2);
+  assert.equal(rows[0].name, 'Bob（已移除）');
+  assert.equal(rows[0].status, '已离开');
+  assert.equal(rows[1].status, '在工作室');
+  const [summary] = exporter.summarize(rows);
+  assert.equal(summary.presentDays, 1);
+  assert.equal(summary.visitCount, 2);
+  assert.equal(summary.totalMinutes, 60);
+  assert.equal(summary.outOfRangeDays, 1);
+});

@@ -9,6 +9,7 @@ const {
   initializeRoles
 } = require('./db');
 const { locationAudit } = require('./attendance');
+const { exportRecords } = require('./export');
 function validDate(value) {
   return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value);
 }
@@ -111,6 +112,7 @@ async function adminOps(db, openid, event, now) {
       config: await optional(db.collection('config').doc('main_config'))
     };
   }
+  if (event.action === 'exportRecords') return exportRecords(db, event, now);
   if (event.action === 'removeMember') {
     if (typeof event.openid !== 'string' || !event.openid) throw new Error('成员标识无效');
     if (event.openid === openid) throw new Error('不能移除自己');
