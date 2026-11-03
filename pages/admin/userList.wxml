@@ -57,6 +57,14 @@
         <view class="action-btn secondary" bindtap="onToggleAdmin" data-user="{{item}}">
           <text>{{item.role === 'admin' || item.isAdmin ? '⚙️ 取消管理员' : '⚙️ 设为管理员'}}</text>
         </view>
+        <view
+          class="action-btn danger"
+          wx:if="{{item.role !== 'admin' && !item.isAdmin}}"
+          bindtap="onRemoveMember"
+          data-user="{{item}}"
+        >
+          <text>🗑️ 移除成员</text>
+        </view>
       </view>
     </view>
   </view>

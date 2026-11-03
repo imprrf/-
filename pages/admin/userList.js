@@ -59,6 +59,30 @@ Page({
       url: `/pages/admin/userDetail?openid=${encodeURIComponent(user.openid)}&name=${encodeURIComponent(user.name || '成员')}`
     });
   },
+  onRemoveMember(e) {
+    const user = e.currentTarget.dataset.user;
+    wx.showModal({
+      title: '确认移除成员',
+      content: `确定移除 ${user.name || '该成员'} 吗？移除后该成员无法再登录和打卡，历史打卡记录会保留。`,
+      confirmColor: '#ff4d4f',
+      success: async (res) => {
+        if (!res.confirm || this._removingMember) return;
+        this._removingMember = true;
+        try {
+          await CloudService.call('adminOps', {
+            action: 'removeMember',
+            openid: user.openid
+          });
+          app.showSuccess('已移除');
+          await this.loadUsers();
+        } catch (e) {
+          app.showError(e.message);
+        } finally {
+          this._removingMember = false;
+        }
+      }
+    });
+  },
   onToggleAdmin(e) {
     const user = e.currentTarget.dataset.user;
     const nextRole = user.role === 'admin' ? 'member' : 'admin';

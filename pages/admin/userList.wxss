@@ -169,6 +169,11 @@
   color: #666;
 }
 
+.action-btn.danger {
+  background: #fff1f0;
+  color: #ff4d4f;
+}
+
 /* 空状态 */
 .empty-state {
   padding: 120rpx 0;
