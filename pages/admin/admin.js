@@ -45,5 +45,52 @@ Page({
   },
   loadMore() {
     if (this.data.hasMore) this.loadAllMembersData(true);
+  },
+  onExport() {
+    if (this._exporting) return;
+    const ranges = [
+      ['all', '全部'],
+      ['week', '近一周'],
+      ['month', '近一个月']
+    ];
+    const formats = [
+      ['xlsx', 'Excel'],
+      ['docx', 'Word']
+    ];
+    wx.showActionSheet({
+      itemList: ranges.map((r) => r[1]),
+      success: (rangeRes) => {
+        wx.showActionSheet({
+          itemList: formats.map((f) => f[1]),
+          success: (formatRes) =>
+            this.exportRecords(ranges[rangeRes.tapIndex][0], formats[formatRes.tapIndex][0])
+        });
+      }
+    });
+  },
+  async exportRecords(range, format) {
+    this._exporting = true;
+    wx.showLoading({ title: '正在生成...', mask: true });
+    try {
+      const result = await CloudService.call('adminOps', {
+        action: 'exportRecords',
+        range,
+        format
+      });
+      const file = await new Promise((resolve, reject) =>
+        wx.cloud.downloadFile({ fileID: result.fileID, success: resolve, fail: reject })
+      );
+      wx.openDocument({
+        filePath: file.tempFilePath,
+        fileType: format,
+        showMenu: true,
+        fail: () => app.showError('文件已生成，但打开失败')
+      });
+    } catch (e) {
+      app.showError((e && e.message) || '导出失败，请重试');
+    } finally {
+      wx.hideLoading();
+      this._exporting = false;
+    }
   }
 });

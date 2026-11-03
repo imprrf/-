@@ -443,3 +443,159 @@ test('前端网络失败保留请求 ID，再次点击复用且成功后清理',
   assert.equal(storage.get('pending_checkin_alice'), undefined);
   assert.equal(page.data.canClock, true);
 });
+test('普通成员不能移除成员', async () => {
+  const db = await fixture();
+  await assert.rejects(
+    core.adminOps(db, 'bob', { action: 'removeMember', openid: 'alice' }, now),
+    /无管理员权限/
+  );
+  assert.equal(db.table('users').get('alice').removed, undefined);
+});
+test('移除成员为软删除：保留用户与历史记录，写审计日志，列表不再显示', async () => {
+  const db = await fixture();
+  await core.checkin(db, 'bob', { requestId: 'request_0001' }, now);
+  await core.adminOps(db, 'alice', { action: 'removeMember', openid: 'bob' }, now + 1000);
+  const bob = db.table('users').get('bob');
+  assert.equal(bob.removed, true);
+  assert.equal(bob.removedBy, 'alice');
+  assert.equal(bob.removedAt, now + 1000);
+  assert.equal(db.table('records').size, 1);
+  const log = [...db.table('roleLogs').values()].find((l) => l.action === 'remove_member');
+  assert.equal(log.actorOpenid, 'alice');
+  assert.equal(log.targetOpenid, 'bob');
+  const users = await core.adminOps(db, 'alice', { action: 'listUsers' }, now);
+  assert.equal(users.items.some((u) => u.openid === 'bob'), false);
+  const records = await core.adminOps(
+    db,
+    'alice',
+    { action: 'listAllRecords', openid: 'bob' },
+    now
+  );
+  assert.equal(records.items.length, 1);
+});
+test('已移除成员无法登录、打卡、改资料，也不能再被设置角色', async () => {
+  const db = await fixture();
+  await core.adminOps(db, 'alice', { action: 'removeMember', openid: 'bob' }, now);
+  await assert.rejects(core.login(db, 'bob', now), /已退出工作室/);
+  await assert.rejects(
+    core.checkin(db, 'bob', { requestId: 'request_0001' }, now),
+    /已退出工作室/
+  );
+  await assert.rejects(
+    core.updateProfile(db, 'bob', { profile: { name: 'New Bob' } }, now),
+    /已退出工作室/
+  );
+  await assert.rejects(
+    core.adminOps(db, 'alice', { action: 'setRole', openid: 'bob', role: 'admin' }, now),
+    /成员不存在/
+  );
+  assert.equal(db.table('records').size, 0);
+  assert.equal(db.table('users').get('bob').name, 'Bob');
+});
+test('不能移除自己、管理员或不存在的成员', async () => {
+  const db = await fixture();
+  await assert.rejects(
+    core.adminOps(db, 'alice', { action: 'removeMember', openid: 'alice' }, now),
+    /不能移除自己/
+  );
+  await core.adminOps(db, 'alice', { action: 'setRole', openid: 'bob', role: 'admin' }, now);
+  await assert.rejects(
+    core.adminOps(db, 'alice', { action: 'removeMember', openid: 'bob' }, now + 1),
+    /先取消/
+  );
+  await assert.rejects(
+    core.adminOps(db, 'alice', { action: 'removeMember', openid: 'nobody' }, now + 1),
+    /成员不存在/
+  );
+  await assert.rejects(
+    core.adminOps(db, 'alice', { action: 'removeMember' }, now + 1),
+    /成员标识无效/
+  );
+  assert.equal(db.table('users').get('bob').removed, undefined);
+});
+test('导出仅管理员可用，范围、格式无效或无记录时拒绝', async () => {
+  const db = await fixture();
+  await assert.rejects(
+    core.adminOps(db, 'bob', { action: 'exportRecords' }, now),
+    /无管理员权限/
+  );
+  await assert.rejects(
+    core.adminOps(db, 'alice', { action: 'exportRecords', range: 'year' }, now),
+    /导出范围无效/
+  );
+  await assert.rejects(
+    core.adminOps(db, 'alice', { action: 'exportRecords', format: 'pdf' }, now),
+    /导出格式无效/
+  );
+  await assert.rejects(
+    core.adminOps(db, 'alice', { action: 'exportRecords', range: 'all' }, now),
+    /没有打卡记录/
+  );
+});
+test('导出整理：范围起点、已移除成员标注、未来记录忽略、汇总口径一致', () => {
+  const exporter = require('../cloudfunctions/_shared/export');
+  assert.equal(exporter.rangeStart('all', now), '');
+  assert.equal(exporter.rangeStart('week', now), '2026-10-06');
+  assert.equal(exporter.rangeStart('month', now), '2026-09-13');
+  const users = [{ _openid: 'bob', name: 'Bob', phone: '13800138000', removed: true }];
+  const records = [
+    {
+      _openid: 'bob',
+      date: '2026-10-12',
+      checkInTime: '09:00',
+      checkOutTime: '10:00',
+      checkOutTimestamp: 1,
+      status: 'Complete',
+      durationMinutes: 60,
+      outOfRange: true
+    },
+    { _openid: 'bob', date: '2026-10-12', checkInTime: '11:00', status: 'Incomplete' },
+    { _openid: 'bob', date: '2026-10-13', checkInTime: '09:00', status: 'Incomplete' }
+  ];
+  const rows = exporter.buildRows(records, users, '2026-10-12');
+  assert.equal(rows.length, 2);
+  assert.equal(rows[0].name, 'Bob（已移除）');
+  assert.equal(rows[0].status, '已离开');
+  assert.equal(rows[1].status, '在工作室');
+  const [summary] = exporter.summarize(rows);
+  assert.equal(summary.presentDays, 1);
+  assert.equal(summary.visitCount, 2);
+  assert.equal(summary.totalMinutes, 60);
+  assert.equal(summary.outOfRangeDays, 1);
+});
+test('导出兼容 type=in/out 旧事件：按成员和日期配对，孤立事件保留', () => {
+  const exporter = require('../cloudfunctions/_shared/export');
+  const users = [
+    { _openid: 'alice', name: 'Alice' },
+    { _openid: 'bob', name: 'Bob' }
+  ];
+  const records = [
+    { _openid: 'alice', date: '2026-10-12', type: 'in', time: '09:00', timestamp: 1000 },
+    { _openid: 'bob', date: '2026-10-12', type: 'in', time: '10:00', timestamp: 2000 },
+    { _openid: 'alice', date: '2026-10-12', type: 'out', time: '11:00', timestamp: 7201000 },
+    { _openid: 'bob', date: '2026-10-12', type: 'out', time: '12:00', timestamp: 7202000 },
+    { _openid: 'alice', date: '2026-10-11', type: 'in', time: '08:00', timestamp: 500 },
+    { _openid: 'bob', date: '2026-10-10', type: 'out', time: '18:00', timestamp: 900 }
+  ];
+  const rows = exporter.buildRows(records, users, '2026-10-12');
+  assert.equal(rows.length, 4);
+  const find = (name, date) => rows.find((r) => r.name === name && r.date === date);
+  const alice = find('Alice', '2026-10-12');
+  assert.equal(alice.checkInTime, '09:00');
+  assert.equal(alice.checkOutTime, '11:00');
+  assert.equal(alice.minutes, 120);
+  assert.equal(alice.status, '已离开');
+  const bob = find('Bob', '2026-10-12');
+  assert.equal(bob.checkInTime, '10:00');
+  assert.equal(bob.checkOutTime, '12:00');
+  assert.equal(bob.minutes, 120);
+  const lonelyIn = find('Alice', '2026-10-11');
+  assert.equal(lonelyIn.checkInTime, '08:00');
+  assert.equal(lonelyIn.checkOutTime, '');
+  assert.equal(lonelyIn.minutes, 0);
+  assert.equal(lonelyIn.status, '未记录离开');
+  const lonelyOut = find('Bob', '2026-10-10');
+  assert.equal(lonelyOut.checkInTime, '');
+  assert.equal(lonelyOut.checkOutTime, '18:00');
+  assert.equal(lonelyOut.status, '已离开');
+});

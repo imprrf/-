@@ -1,6 +1,6 @@
 {
   "name": "attendance-miniprogram",
-  "version": "1.0.2",
+  "version": "2.1.0",
   "private": true,
   "scripts": {
     "test": "node --test tests/fix-plan.test.js",

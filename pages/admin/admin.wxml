@@ -11,6 +11,9 @@
       <text class="title-text">👑 团队打卡总览</text>
       <text class="subtitle">今日最新打卡记录</text>
     </view>
+    <view class="export-btn" bindtap="onExport">
+      <text>📥 导出打卡记录（Excel / Word）</text>
+    </view>
     
     <scroll-view scroll-y class="records-scroll" wx:if="{{memberRecords.length > 0}}">
       <view class="record-item" wx:for="{{memberRecords}}" wx:key="_id">

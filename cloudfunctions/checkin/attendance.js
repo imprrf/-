@@ -1,4 +1,4 @@
-const { hash, optional, all, userFor } = require('./db');
+const { hash, optional, all, userFor, assertActive } = require('./db');
 function dateParts(now) {
   const iso = new Date(now + 8 * 3600000).toISOString();
   return {
@@ -56,6 +56,7 @@ async function checkin(db, openid, event, now) {
     throw new Error('打卡请求标识无效');
   const user = await userFor(db, openid);
   if (!user) throw new Error('请先登录');
+  assertActive(user);
   const receiptId = hash(`${openid}:${event.requestId}`);
   const previousReceipt = await optional(db.collection('checkin_requests').doc(receiptId));
   // 已提交请求的重试不受之后的配置变动或定位失败影响。
