@@ -168,7 +168,7 @@ Page({
   onAbout() {
     wx.showModal({
       title: '工作室打卡',
-      content: `版本：${this.data.appVersion}\n\n记录工作室到访、离开和停留时长，可在任意时间打卡。`,
+      content: `版本：${this.data.appVersion}\n\n支持导出打卡数据，新增删除成员功能。`,
       showCancel: false
     });
   },
