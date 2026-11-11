@@ -212,6 +212,61 @@
   padding: 30rpx;
 }
 
+/* 隐私提示 */
+.privacy-notice {
+  background: #f5f7fa;
+  border-radius: 12rpx;
+  padding: 20rpx;
+  margin-bottom: 30rpx;
+}
+
+.notice-text {
+  font-size: 26rpx;
+  color: #666;
+  line-height: 1.8;
+}
+
+.notice-text .highlight {
+  color: #1890ff;
+  font-weight: 500;
+}
+
+.notice-text .link {
+  color: #1890ff;
+  text-decoration: underline;
+  margin: 0 4rpx;
+}
+
+/* 协议勾选 */
+.agreement-row {
+  margin-top: 24rpx;
+  padding-top: 20rpx;
+  border-top: 1rpx solid #f0f0f0;
+}
+
+.agreement-label {
+  display: flex;
+  align-items: flex-start;
+}
+
+.agreement-label checkbox {
+  margin-right: 12rpx;
+  margin-top: 4rpx;
+}
+
+.agreement-text {
+  flex: 1;
+  font-size: 26rpx;
+  color: #666;
+  line-height: 1.6;
+}
+
+.agreement-text .link {
+  color: #1890ff;
+  text-decoration: underline;
+  margin: 0 2rpx;
+}
+
 .edit-row {
   display: flex;
   align-items: center;

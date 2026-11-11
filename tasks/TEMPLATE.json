@@ -1,0 +1,17 @@
+{
+  "id": "T1.1",
+  "title": "一句话说明要做什么",
+  "context": "为什么要改,问题出在哪里(带 file:line)",
+  "owned": ["services/DbService.js"],
+  "readOnly": ["services/CheckinService.js", "pages/records/records.js"],
+  "forbidden": ["app.json", "project.config.json", "project.private.config.json"],
+  "changes": [
+    "具体改动 1: 在哪个函数、改成什么行为,必要时给出代码片段"
+  ],
+  "callers": ["改动涉及的约定,以及 Architect 已确认的调用点"],
+  "acceptance": [
+    "可逐条核对的验收条件 1"
+  ],
+  "manualVerify": "需要在微信开发者工具里手动验证的步骤(Worker 无法执行,仅供 Architect 与用户参考)",
+  "doNot": ["明确不要做的事,例如不改返回值结构"]
+}

@@ -1,0 +1,64 @@
+<!-- pages/terms/terms.wxml - 用户服务协议页面 -->
+<view class="terms-container">
+  <view class="header">
+    <text class="title">用户服务协议</text>
+  </view>
+
+  <scroll-view class="content" scroll-y>
+    <view class="section">
+      <text class="paragraph">欢迎使用机电打卡小程序（以下简称"本小程序"）。在使用本小程序前，请您仔细阅读并理解本协议的全部内容。</text>
+    </view>
+
+    <view class="section">
+      <text class="section-title">1. 服务说明</text>
+      <text class="paragraph">本小程序为工作室成员提供打卡考勤服务，记录成员的到访时间、位置和停留时长等信息。</text>
+    </view>
+
+    <view class="section">
+      <text class="section-title">2. 用户注册与账号</text>
+      <text class="paragraph">• 您需通过微信授权登录使用本小程序服务</text>
+      <text class="paragraph">• 您应提供真实、准确的个人信息（姓名、手机号）</text>
+      <text class="paragraph">• 您对账号和密码的安全负有保管责任</text>
+    </view>
+
+    <view class="section">
+      <text class="section-title">3. 用户权利与义务</text>
+      <text class="paragraph">• 您有权使用本小程序提供的打卡、查看记录等功能</text>
+      <text class="paragraph">• 您应遵守国家法律法规和本协议约定</text>
+      <text class="paragraph">• 您不得利用本小程序从事任何违法违规活动</text>
+      <text class="paragraph">• 您不得干扰本小程序的正常运行</text>
+    </view>
+
+    <view class="section">
+      <text class="section-title">4. 隐私保护</text>
+      <text class="paragraph">我们重视您的隐私保护，关于个人信息收集、使用、存储等详细内容，请查看《隐私政策》。</text>
+    </view>
+
+    <view class="section">
+      <text class="section-title">5. 服务的变更、中断或终止</text>
+      <text class="paragraph">• 我们保留随时变更、中断或终止部分或全部服务的权利</text>
+      <text class="paragraph">• 因系统维护或升级需要暂停服务时，我们将尽可能提前通知</text>
+    </view>
+
+    <view class="section">
+      <text class="section-title">6. 免责声明</text>
+      <text class="paragraph">• 因不可抗力、网络故障、设备故障等原因导致的服务中断，我们不承担责任</text>
+      <text class="paragraph">• 因用户违反本协议导致的任何后果，由用户自行承担</text>
+    </view>
+
+    <view class="section">
+      <text class="section-title">7. 协议的修改</text>
+      <text class="paragraph">我们有权在必要时修改本协议条款，修改后的协议将在小程序内公布。如您继续使用本小程序，即表示您接受修改后的协议。</text>
+    </view>
+
+    <view class="section">
+      <text class="section-title">8. 联系方式</text>
+      <text class="paragraph">如您对本协议有任何疑问或建议，请通过以下方式联系我们：</text>
+      <text class="paragraph contact">邮箱：<text class="link">19132075202@163.com</text></text>
+    </view>
+
+    <view class="section">
+      <text class="update-date">更新日期：2026-11-11</text>
+    </view>
+  </scroll-view>
+</view>

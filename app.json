@@ -6,7 +6,9 @@
     "pages/admin/admin",
     "pages/admin/userList",
     "pages/admin/userDetail",
-    "pages/admin/locationSet"
+    "pages/admin/locationSet",
+    "pages/privacy/privacy",
+    "pages/terms/terms"
   ],
   "lazyCodeLoading": "requiredComponents",
   "window": {

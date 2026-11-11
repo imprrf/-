@@ -108,6 +108,10 @@
       </view>
 
       <view class="modal-body">
+        <view class="privacy-notice">
+          <text class="notice-text">你的小程序<text class="highlight">【手机号】</text>涉及收集、使用和存储用户信息，请补充<text class="link" bindtap="onViewTerms">《用户服务协议》</text>及<text class="link" bindtap="onViewPrivacy">《隐私政策》</text>，明确告知收集用户信息的使用目的、方式和用途，并取得用户授权同意后，才能获取用户信息。</text>
+        </view>
+
         <view class="edit-row">
           <text class="edit-label">姓名</text>
           <input
@@ -129,6 +133,15 @@
             value="{{editForm.phone}}"
             bindinput="onPhoneInput"
           />
+        </view>
+
+        <view class="agreement-row">
+          <checkbox-group bindchange="onAgreementChange">
+            <label class="agreement-label">
+              <checkbox value="agreed" checked="{{editForm.agreed}}" />
+              <text class="agreement-text">我已阅读并同意<text class="link" bindtap="onViewTermsInModal">《用户服务协议》</text>、<text class="link" bindtap="onViewPrivacyInModal">《隐私政策》</text>和<text class="link" bindtap="onViewPrivacyInModal">《使用规范》</text></text>
+            </label>
+          </checkbox-group>
         </view>
       </view>
 

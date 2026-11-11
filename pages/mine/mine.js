@@ -13,7 +13,7 @@ Page({
       location: { name: '重庆西永考勤点', radius: 300 }
     },
     showEditModal: false,
-    editForm: { name: '', phone: '' },
+    editForm: { name: '', phone: '', agreed: false },
     showRuleModal: false
   },
 
@@ -107,13 +107,14 @@ Page({
       showEditModal: true,
       editForm: {
         name: userInfo && userInfo.name !== '微信用户' ? userInfo.name || '' : '',
-        phone: userInfo ? userInfo.phone || '' : ''
+        phone: userInfo ? userInfo.phone || '' : '',
+        agreed: false
       }
     });
   },
 
   onCloseEditModal() {
-    this.setData({ showEditModal: false, editForm: { name: '', phone: '' } });
+    this.setData({ showEditModal: false, editForm: { name: '', phone: '', agreed: false } });
   },
 
   onNameInput(e) {
@@ -121,6 +122,31 @@ Page({
   },
   onPhoneInput(e) {
     this.setData({ 'editForm.phone': e.detail.value });
+  },
+
+  onAgreementChange(e) {
+    const agreed = e.detail.value.includes('agreed');
+    this.setData({ 'editForm.agreed': agreed });
+  },
+
+  onViewTerms(e) {
+    e.stopPropagation();
+    wx.navigateTo({ url: '/pages/terms/terms' });
+  },
+
+  onViewPrivacy(e) {
+    e.stopPropagation();
+    wx.navigateTo({ url: '/pages/privacy/privacy' });
+  },
+
+  onViewTermsInModal(e) {
+    e.stopPropagation();
+    wx.navigateTo({ url: '/pages/terms/terms' });
+  },
+
+  onViewPrivacyInModal(e) {
+    e.stopPropagation();
+    wx.navigateTo({ url: '/pages/privacy/privacy' });
   },
 
   async onSaveProfile() {
@@ -132,6 +158,10 @@ Page({
     // 有意使用宽松的中国大陆 11 位手机号格式校验。
     if (editForm.phone && !/^1\d{10}$/.test(editForm.phone)) {
       app.showError('请输入正确的手机号');
+      return;
+    }
+    if (!editForm.agreed) {
+      app.showError('请先阅读并同意用户服务协议和隐私政策');
       return;
     }
     try {
@@ -169,7 +199,27 @@ Page({
     wx.showModal({
       title: '工作室打卡',
       content: `版本：${this.data.appVersion}\n\n支持导出打卡数据，新增删除成员功能。`,
-      showCancel: false
+      showCancel: true,
+      cancelText: '关闭',
+      confirmText: '查看协议',
+      success: (res) => {
+        if (res.confirm) {
+          this.showAgreementOptions();
+        }
+      }
+    });
+  },
+
+  showAgreementOptions() {
+    wx.showActionSheet({
+      itemList: ['用户服务协议', '隐私政策'],
+      success: (res) => {
+        if (res.tapIndex === 0) {
+          wx.navigateTo({ url: '/pages/terms/terms' });
+        } else if (res.tapIndex === 1) {
+          wx.navigateTo({ url: '/pages/privacy/privacy' });
+        }
+      }
     });
   },
 
